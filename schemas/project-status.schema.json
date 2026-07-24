@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pickbitsai/company-os/schemas/project-status.schema.json",
+  "title": "Company OS project status",
+  "description": "Optional per-project rollup. Drop one at <project>/intranet/project-status.json (configurable) and that project's station gains a live pulse instead of a page-mtime guess. schemaVersion must use your config's schemaPrefix.",
+  "type": "object",
+  "required": ["schemaVersion", "projectId", "name", "statusPage", "updatedAt", "health", "headline", "metrics", "activity", "todos", "security"],
+  "properties": {
+    "schemaVersion": { "type": "string", "pattern": "\\.project-status/v1$" },
+    "projectId": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "Must equal the engine id in the manifest, or the file is ignored with a warning." },
+    "name": { "type": "string", "minLength": 1 },
+    "statusPage": { "type": "string", "minLength": 1 },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "health": { "enum": ["nominal", "attention", "blocked", "on-demand"] },
+    "headline": { "type": "string", "minLength": 1, "description": "One sentence: what changed, or what is blocked." },
+    "metrics": { "type": "object", "additionalProperties": { "type": "number" } },
+    "activity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "label", "detail"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "label": { "type": "string", "minLength": 1 },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "todos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "priority", "status"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1 },
+          "priority": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "minLength": 1 },
+          "taskId": { "type": "string" }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["state", "lastScanAt", "scope", "summary"],
+      "properties": {
+        "state": { "enum": ["current", "incomplete", "overdue", "unknown"] },
+        "lastScanAt": { "type": ["string", "null"], "format": "date-time" },
+        "scope": { "type": "string" },
+        "summary": { "type": "string", "minLength": 1 },
+        "reportPath": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

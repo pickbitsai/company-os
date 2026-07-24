@@ -1,0 +1,142 @@
+{
+  "$comment": "Example manifest for a fictional company. Exercises every field the renderer reads, so it doubles as the test fixture. Copy this shape for your own engines.json — the paths in `dir` are relative to `root` in your config.",
+  "engines": [
+    {
+      "id": "signal",
+      "dir": "packages/signal",
+      "name": "Signal",
+      "class": "Research + ranking",
+      "accent": "#00f4ff",
+      "avatar": {
+        "badge": "SCAN",
+        "station": "Research desk",
+        "skin": "#c8845b",
+        "hair": "#16151c",
+        "shirt": "#177f8b",
+        "style": "side"
+      },
+      "role": "Collects source material, deduplicates it, and ranks what is worth acting on. Produces a ranked shortlist and nothing else — deciding what to build with it belongs to Forge.",
+      "ingress": [
+        "Public RSS and API feeds (28 sources)",
+        "Last week's shortlist, for deduplication"
+      ],
+      "egress": [
+        "A ranked shortlist per run",
+        "Rejection reasons for anything dropped"
+      ],
+      "servers": [
+        { "port": 7801, "what": "shortlist viewer", "start": "npm run viewer" }
+      ],
+      "nodes": [
+        {
+          "name": "collect",
+          "desc": "Fetches every source in parallel, with a per-source timeout so one slow feed cannot stall a run.",
+          "cmd": "node scripts/collect.mjs --window 24h",
+          "tasks": ["acme-collect-morning", "acme-collect-evening"]
+        },
+        {
+          "name": "dedupe",
+          "desc": "Near-duplicate detection across the current window and the previous shortlist.",
+          "cmd": "npm run dedupe"
+        },
+        {
+          "name": "rank",
+          "desc": "Deterministic scoring. Ordering is never delegated to a model — the weights are in the repo and reviewable.",
+          "cmd": "node scripts/rank.mjs",
+          "tasks": ["acme-rank-daily"]
+        }
+      ],
+      "logs": ["runs/{date}/shortlist.json", "runs/{date}/rejected.json"],
+      "docs": ["docs/SCORING.md", "docs/SOURCES.md"],
+      "scriptNotes": {
+        "rank": "weights live in config/weights.json — change those, not the script"
+      }
+    },
+    {
+      "id": "forge",
+      "dir": "packages/forge",
+      "name": "Forge",
+      "class": "Production studio",
+      "accent": "#ffcc44",
+      "avatar": {
+        "badge": "MAKE",
+        "station": "Production floor",
+        "skin": "#6e4031",
+        "hair": "#211713",
+        "shirt": "#b17818",
+        "style": "cap"
+      },
+      "role": "Turns an approved shortlist item into a finished artefact. Owns every output gate, so nothing leaves the building without passing them.",
+      "ingress": [
+        "Approved shortlist items from Signal",
+        "Brand tokens from the design package"
+      ],
+      "egress": [
+        "Built artefacts with a provenance record",
+        "A published changelog entry per release"
+      ],
+      "servers": [
+        { "port": 7802, "what": "control panel", "start": "npm run control" }
+      ],
+      "nodes": [
+        {
+          "name": "build",
+          "desc": "Compiles an artefact from an approved item. Fails closed if provenance is missing.",
+          "cmd": "npm run build"
+        },
+        {
+          "name": "gates",
+          "desc": "Runs the full output gate suite: schema, links, accessibility, and size budget.",
+          "cmd": "npm run gates",
+          "tasks": ["acme-gates-nightly"]
+        },
+        {
+          "name": "release",
+          "desc": "Publishes a passing artefact and records the release. The only step that writes outside the repo.",
+          "cmd": "npm run publish -- <version>"
+        }
+      ],
+      "logs": ["releases/{version}/provenance.json"],
+      "docs": ["docs/GATES.md", "docs/RELEASE.md"],
+      "statusFile": "status/project-status.json"
+    },
+    {
+      "id": "atlas",
+      "dir": "packages/atlas",
+      "name": "Atlas",
+      "class": "Datastore",
+      "accent": "#00ff88",
+      "avatar": { "badge": "INDEX", "station": "Archive", "style": "dome" },
+      "role": "The shared index every other project reads from. Session-driven: there is no pipeline, you query it.",
+      "ingress": ["Artefacts and provenance records from Forge"],
+      "egress": ["Query API on request"],
+      "hasOwnDashboard": true,
+      "dashboardNote": "Atlas ships its own status page; this generator writes only its command sheet."
+    },
+    {
+      "id": "sketch",
+      "dir": "packages/sketch",
+      "name": "Sketch",
+      "class": "Design sub-engine",
+      "accent": "#ff6b6b",
+      "avatar": { "badge": "DRAW", "station": "Studio", "style": "bob" },
+      "role": "Illustration and layout work. Deliberately has no package.json — a project can be part of the company without being a node project, and the dashboard should say nothing rather than invent a command surface.",
+      "ingress": ["Art direction briefs"],
+      "egress": ["Source files and exported assets"]
+    }
+  ],
+  "satellites": [
+    {
+      "id": "docs-site",
+      "dir": "packages/docs-site",
+      "name": "Documentation site",
+      "note": "Public docs — deploys on push",
+      "url": "https://example.com/docs"
+    },
+    {
+      "name": "design tokens",
+      "note": "Single source of truth for brand colours and spacing",
+      "path": "packages/forge/config/tokens.json"
+    }
+  ]
+}

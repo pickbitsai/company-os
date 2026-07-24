@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "company-os.project-status/v1",
+  "projectId": "forge",
+  "name": "Forge",
+  "statusPage": "index.html",
+  "updatedAt": "2026-07-24T09:15:00.000Z",
+  "health": "attention",
+  "headline": "Size-budget gate is failing on the new illustration set; release is held.",
+  "metrics": {
+    "gatesPassing": 3,
+    "gatesTotal": 4,
+    "releasesThisMonth": 6
+  },
+  "activity": [
+    {
+      "at": "2026-07-24T09:15:00.000Z",
+      "label": "gate failure",
+      "detail": "gates:size exceeded the 250KB budget by 38KB after the illustration import."
+    },
+    {
+      "at": "2026-07-23T16:40:00.000Z",
+      "label": "release",
+      "detail": "v1.4.0 published with provenance recorded."
+    }
+  ],
+  "todos": [
+    { "title": "Compress the illustration set or raise the budget deliberately", "priority": "high", "status": "open" },
+    { "title": "Add a per-asset size report to gates:size output", "priority": "medium", "status": "open" }
+  ],
+  "security": {
+    "state": "current",
+    "lastScanAt": "2026-07-22T02:00:00.000Z",
+    "scope": "packages/forge dependencies",
+    "summary": "No known advisories in the dependency tree.",
+    "reportPath": null
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pickbitsai/company-os/schemas/engines.schema.json",
+  "title": "Company OS manifest",
+  "description": "The single file describing your company: one entry per project, plus satellites that are tracked but have no page of their own.",
+  "type": "object",
+  "required": ["engines"],
+  "properties": {
+    "$comment": { "type": "string" },
+    "engines": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/engine" }
+    },
+    "satellites": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/satellite" }
+    }
+  },
+  "$defs": {
+    "engine": {
+      "type": "object",
+      "required": ["id", "dir", "name", "class", "accent", "role"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "Stable identifier. Also the avatar filename (<id>.webp) and the governance profile key." },
+        "dir": { "type": "string", "description": "Directory relative to config.root. Its package.json supplies the command surface." },
+        "name": { "type": "string", "minLength": 1 },
+        "class": { "type": "string", "description": "Short category shown under the title, e.g. 'Production studio'." },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{3,8}$" },
+        "role": { "type": "string", "description": "What this project is responsible for, and what it deliberately is not." },
+        "avatar": {
+          "type": "object",
+          "properties": {
+            "badge": { "type": "string", "description": "Short label on the desk monitor, e.g. 'SCAN'." },
+            "station": { "type": "string", "description": "Desk name shown under the title." },
+            "style": { "enum": ["side", "bun", "spike", "cap", "long", "bob", "wave", "dome", "headset"], "description": "CSS-figure variant, used when no mascot image is configured." },
+            "skin": { "type": "string" },
+            "hair": { "type": "string" },
+            "shirt": { "type": "string" }
+          }
+        },
+        "ingress": { "type": "array", "items": { "type": "string" }, "description": "What this project consumes. Entries containing filesystem paths are dropped from any public projection." },
+        "egress": { "type": "array", "items": { "type": "string" }, "description": "What this project produces." },
+        "nodes": {
+          "type": "array",
+          "description": "Pipeline stages, rendered left to right.",
+          "items": {
+            "type": "object",
+            "required": ["name", "cmd"],
+            "properties": {
+              "name": { "type": "string" },
+              "desc": { "type": "string" },
+              "cmd": { "type": "string", "description": "The command this stage runs. Matched against package.json scripts to mark them wired/scheduled." },
+              "tasks": { "type": "array", "items": { "type": "string" }, "description": "Scheduler task names. Their live state is resolved at build time." }
+            }
+          }
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["port", "what", "start"],
+            "properties": {
+              "port": { "type": "integer" },
+              "what": { "type": "string" },
+              "start": { "type": "string" }
+            }
+          }
+        },
+        "logs": { "type": "array", "items": { "type": "string" } },
+        "docs": { "type": "array", "items": { "type": "string" } },
+        "scriptNotes": {
+          "type": "object",
+          "description": "Optional one-line notes keyed by npm script name.",
+          "additionalProperties": { "type": "string" }
+        },
+        "hasOwnDashboard": { "type": "boolean", "description": "This project maintains its own index.html. The generator will not overwrite it, and writes ops-commands.html alongside instead." },
+        "dashboardNote": { "type": "string" },
+        "statusFile": { "type": "string", "description": "Override the per-project status file path (default: config.projectStatusFile)." }
+      }
+    },
+    "satellite": {
+      "type": "object",
+      "required": ["name", "note"],
+      "properties": {
+        "id": { "type": "string" },
+        "dir": { "type": "string", "description": "Set this to surface the satellite's npm commands on the floor." },
+        "name": { "type": "string" },
+        "note": { "type": "string" },
+        "url": { "type": "string" },
+        "path": { "type": "string" },
+        "start": { "type": "string" },
+        "scriptNotes": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    }
+  }
+}

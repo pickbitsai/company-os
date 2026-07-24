@@ -1,0 +1,18 @@
+{
+  "name": "@acme/forge",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "control": "node tools/control/server.mjs",
+    "gates": "npm run gates:schema && npm run gates:links && npm run gates:a11y && npm run gates:size",
+    "gates:schema": "node gates/schema.mjs",
+    "gates:links": "node gates/links.mjs",
+    "gates:a11y": "node gates/a11y.mjs",
+    "gates:size": "node gates/size.mjs",
+    "publish": "node scripts/release.mjs",
+    "deploy:staging": "node scripts/deploy.mjs --env staging",
+    "migrate": "node scripts/migrate.mjs",
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "@pickbitsai/company-os",
+  "version": "0.1.0",
+  "description": "Company OS — a local ops dashboard for people running many projects with AI agents. Point it at a manifest, get a live company floor. MIT, no telemetry.",
+  "keywords": [
+    "dashboard",
+    "ops",
+    "static-site",
+    "monorepo",
+    "npm-scripts",
+    "task-scheduler",
+    "cron",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "author": "PickBits.AI",
+  "homepage": "https://github.com/pickbitsai/company-os#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pickbitsai/company-os.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pickbitsai/company-os/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./adapters/*": "./src/adapters/*.mjs"
+  },
+  "bin": {
+    "company-os": "./bin/company-os.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schemas/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node bin/company-os.mjs build",
+    "demo": "node bin/company-os.mjs build --config examples/acme",
+    "test": "node test/run.mjs",
+    "leakscan": "node test/leakscan.mjs",
+    "preflight": "npm run leakscan && npm test",
+    "clean": "node test/clean-fixture.mjs",
+    "prepack": "npm run clean",
+    "prepublishOnly": "npm run preflight"
+  },
+  "dependencies": {}
+}

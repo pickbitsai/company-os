@@ -1,0 +1,10 @@
+{
+  "name": "@acme/atlas",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "query": "node bin/query.mjs",
+    "reindex": "node bin/reindex.mjs",
+    "stats": "node bin/stats.mjs"
+  }
+}

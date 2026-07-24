@@ -1,0 +1,17 @@
+node_modules/
+*.tgz
+.DS_Store
+
+# Never commit a real company manifest. The only manifests in this repo are the
+# fictional ones under examples/ — anything else is somebody's private ops data.
+company-os.config.mjs
+engines.json
+ai-governance.json
+!examples/**/engines.json
+!examples/**/governance.json
+
+# Build output from the demo
+examples/**/index.html
+examples/**/*/index.html
+examples/**/ops-commands.html
+test/tmp/

@@ -1,0 +1,19 @@
+{
+  "name": "@acme/signal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "_note": "Signal owns collection, dedup and ranking. Scoring weights are data, not code — see config/weights.json.",
+    "collect": "node scripts/collect.mjs --window 24h",
+    "collect:dry": "node scripts/collect.mjs --window 24h --dry-run",
+    "dedupe": "node scripts/dedupe.mjs",
+    "rank": "node scripts/rank.mjs",
+    "rank:explain": "node scripts/rank.mjs --explain",
+    "sources:list": "node scripts/sources.mjs --list",
+    "sources:check": "node scripts/sources.mjs --check",
+    "viewer": "node tools/viewer/server.mjs",
+    "test": "node --test",
+    "pretest": "node scripts/fixtures.mjs",
+    "lint": "eslint ."
+  }
+}
