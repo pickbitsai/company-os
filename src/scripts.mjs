@@ -5,7 +5,12 @@
 // actually runs, and 39 others that exist". That distinction is what `wired`/`scheduled` carry.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
+
+// A manifest may address a project relatively ("packages/signal") or absolutely — the latter is
+// common when entries come from a registry that records full folder paths. join(root, absolute)
+// would silently concatenate the two roots into a path that exists nowhere, so branch on it.
+export const projectPath = (root, dir) => (isAbsolute(dir) ? dir : join(root, dir));
 
 // Flagged so the dashboard never reads as an invitation to paste a publish command without
 // looking. Marking is visual only: copy buttons copy text, nothing here executes anything.
@@ -16,7 +21,7 @@ const normCmd = (t) => String(t || "").replaceAll("\\", "/").replace(/\s+/g, " "
 export function packageScripts(root, dir) {
   if (!dir) return null;
   try {
-    const scripts = JSON.parse(readFileSync(join(root, dir, "package.json"), "utf8")).scripts;
+    const scripts = JSON.parse(readFileSync(join(projectPath(root, dir), "package.json"), "utf8")).scripts;
     return scripts && typeof scripts === "object" ? scripts : null;
   } catch {
     return null; // no package.json, or unparseable — render nothing rather than guess.
@@ -109,7 +114,7 @@ export function scriptGroups(scripts) {
 // would otherwise have nowhere to live, so they get a standalone ops-commands.html instead.
 export function ownsOwnIndex(root, eng, generatedMark) {
   if (!eng.hasOwnDashboard) return false;
-  const target = join(root, eng.dir, "index.html");
+  const target = join(projectPath(root, eng.dir), "index.html");
   if (!existsSync(target)) return false;
   return !readFileSync(target, "utf8").slice(0, 400).includes(generatedMark);
 }

@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { CSS, companyCss } from "./styles.mjs";
 import {
-  engineScripts, ownsOwnIndex, scanScripts, scriptGroups, scriptsNote,
+  engineScripts, ownsOwnIndex, projectPath, scanScripts, scriptGroups, scriptsNote,
 } from "./scripts.mjs";
 
 export const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -107,14 +107,14 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
   // ---------- skills ----------
   function scanSkills(dir) {
     const found = [];
-    const skillsDir = join(root, dir, ".claude", "skills");
+    const skillsDir = join(projectPath(root, dir), ".claude", "skills");
     try {
       for (const e of readdirSync(skillsDir, { withFileTypes: true })) {
         if (e.isDirectory() && existsSync(join(skillsDir, e.name, "SKILL.md"))) found.push(e.name);
       }
     } catch {}
     try {
-      for (const e of readdirSync(join(root, dir, "skills"))) {
+      for (const e of readdirSync(join(projectPath(root, dir), "skills"))) {
         if (e.endsWith(".md")) found.push(`skills/${e}`);
       }
     } catch {}
@@ -301,7 +301,10 @@ ${commandsSection(eng)}`;
       const data = {};
       for (const [key, spec] of Object.entries(collection.sources || {})) data[key] = loadArray(root, spec);
       const rows = typeof collection.rows === "function"
-        ? collection.rows(data, { esc })
+        // Helpers a row renderer may need. `commands` lets a collection read a project's own
+        // package.json — that is how a games table shows how to start each game without the
+        // registry having to duplicate command lines it would only get wrong.
+        ? collection.rows(data, { esc, cmdRow, commands: (dir) => scanScripts(root, dir) })
         : (data.items || []).map((item) => `<tr>${(collection.headers || []).map((h) => `<td>${esc(item[h.field ?? h] ?? "")}</td>`).join("")}</tr>`).join("");
       if (!rows) return "";
       const headers = (collection.headers || []).map((h) => `<th>${esc(typeof h === "string" ? h : h.label)}</th>`).join("");
@@ -329,7 +332,7 @@ ${commandsSection(eng)}`;
       const status = PROJECT_STATUS.get(eng.id);
       const href = `${encodeURI(eng.dir)}/${encodeURI(status?.statusPage || "index.html")}`;
       if (!status) {
-        const pagePath = join(root, eng.dir, "index.html");
+        const pagePath = join(projectPath(root, eng.dir), "index.html");
         let pageUpdated = "not generated";
         try { pageUpdated = statSync(pagePath).mtime.toISOString().replace("T", " ").slice(0, 16); } catch {}
         const engTasks = (eng.nodes || []).flatMap((node) => node.tasks || []).map(taskRow);
