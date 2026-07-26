@@ -5,7 +5,7 @@
 // does, so a break shows up as a wrong page rather than a failed mock.
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build, loadConfig } from "../src/index.mjs";
@@ -217,6 +217,78 @@ await test("a panel whose optional tool is missing is skipped, not fatal", async
   }
   rmSync(join(ACME, ".test-out"), { recursive: true, force: true });
 });
+
+// ---------------------------------------------------------------- shape panel
+// This panel makes CLAIMS about someone's projects, so the tests are about whether the claims are
+// falsifiable and whether the stated reasons support the stated conclusion.
+console.log("\n--- shape panel ---");
+{
+  const shape = await import("../src/panels/shape.mjs");
+  const fixtures = join(ROOT, "test", "tmp", "shape");
+  rmSync(fixtures, { recursive: true, force: true });
+
+  const write = (rel, content) => {
+    const p = join(fixtures, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, typeof content === "string" ? content : JSON.stringify(content, null, 2));
+  };
+
+  // An agentic engine: agent files, skills, namespaced commands.
+  write("engine/CLAUDE.md", "# engine");
+  write("engine/AGENTS.md", "# agents");
+  write("engine/.claude/skills/one/SKILL.md", "# skill");
+  write("engine/.claude/skills/two/SKILL.md", "# skill");
+  write("engine/README.md", "# engine");
+  write("engine/package.json", {
+    name: "engine", private: true,
+    scripts: Object.fromEntries("abcdefghijklmnop".split("").map((c, i) => [`group${i % 4}:${c}`, `node ${c}.mjs`])),
+  });
+  // A CLI.
+  write("cli/README.md", "# cli");
+  write("cli/package.json", { name: "cli", version: "1.0.0", bin: { cli: "./bin.js" }, scripts: { test: "node --test" } });
+  // A game — its only distinguishing signal is a dependency.
+  write("game/README.md", "# game");
+  write("game/package.json", { name: "game", version: "1.0.0", main: "index.js", dependencies: { phaser: "^3" } });
+  // A junk drawer: no README, no manifest, no git.
+  write("junk/notes.txt", "misc");
+  write("junk/old-thing.js", "// ?");
+
+  const manifest = {
+    engines: ["engine", "cli", "game", "junk"].map((id) => ({
+      id, dir: id, name: id, class: "x", accent: "#888", role: "x", nodes: [],
+    })),
+  };
+  const data = shape.collect({ config: { root: fixtures }, manifest, settings: { looseThreshold: 20 } });
+  const byId = Object.fromEntries(data.projects.map((p) => [p.id, p]));
+
+  await test("classifies an agentic engine", () => assert.ok(byId.engine?.kind === "agentic engine", byId.engine?.kind));
+  await test("classifies a CLI", () => assert.ok(byId.cli?.kind === "tool (CLI)", byId.cli?.kind));
+  await test("a dependency-defined game is not mislabelled a library", () => assert.ok(byId.game?.kind === "game", byId.game?.kind));
+  await test("an empty directory is unclassified, not guessed", () => assert.ok(byId.junk?.kind === "unclassified", byId.junk?.kind));
+
+  // The label must be falsifiable: four inputs, more than one output.
+  await test("classifier produces more than one kind", () => assert.ok(Object.keys(data.kinds).length >= 3, JSON.stringify(data.kinds)));
+
+  // The reason shown must support the verdict reached. This is the bug the panel shipped with:
+  // "game" displaying "CLAUDE.md present" as its evidence.
+  await test("game's evidence cites the dependency", () => assert.ok(/phaser/.test(byId.game.evidence.join(" ")), byId.game.evidence.join(" · ")));
+  await test("CLI's evidence cites bin", () => assert.ok(/bin/.test(byId.cli.evidence.join(" ")), byId.cli.evidence.join(" · ")));
+  await test("engine's evidence cites agent files or skills", () => assert.ok(/CLAUDE|skill/.test(byId.engine.evidence.join(" ")), byId.engine.evidence.join(" · ")));
+  await test("engine's evidence does NOT cite a dependency", () => assert.ok(!/dependency/.test(byId.engine.evidence.join(" "))));
+
+  // Coherence findings are observations, not adjectives.
+  await test("junk drawer flagged", () => assert.ok(byId.junk.junkDrawer === true));
+  await test("coherent project not flagged", () => assert.ok(byId.engine.junkDrawer === false));
+  await test("junk drawer names all three missing things", () => assert.ok(byId.junk.findings.length >= 3, JSON.stringify(byId.junk.findings)));
+  await test("no finding uses a judgement word", () => assert.ok(!JSON.stringify(data.projects).match(/\bdirty\b|\bbad\b|\bmessy\b/i)));
+
+  // Rendering must not assert a coherence problem where there is none.
+  const html = shape.render(data, { esc: (s) => String(s), cmdRow: (c) => `<code>${c}</code>` });
+  await test("renders the agent-scan prompt for what a file tree cannot settle", () => assert.ok(/Audit each project/.test(html)));
+  await test("renders every project", () => assert.ok(["engine", "cli", "game", "junk"].every((n) => html.includes(n))));
+
+  rmSync(fixtures, { recursive: true, force: true });
+}
 
 // ---------------------------------------------------------------- summary
 console.log(`\n${failures.length ? `FAIL — ${failures.length} of ${passed + failures.length}` : `PASS — ${passed} tests`}`);
