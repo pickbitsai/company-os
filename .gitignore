@@ -2,16 +2,27 @@ node_modules/
 *.tgz
 .DS_Store
 
-# Never commit a real company manifest. The only manifests in this repo are the
-# fictional ones under examples/ — anything else is somebody's private ops data.
+# Never commit a real company manifest or config. These names are ignored globally so someone's
+# private ops data cannot arrive here by accident — then the example fixtures are allowed back in
+# explicitly. Getting the negations wrong is silent: the file just never lands in the repo, and
+# only CI on a fresh clone notices.
 company-os.config.mjs
 engines.json
 ai-governance.json
+!examples/**/company-os.config.mjs
 !examples/**/engines.json
 !examples/**/governance.json
 
-# Build output from the demo
+# Generated demo output. Ignored so a local build does not dirty the tree.
 examples/**/index.html
 examples/**/*/index.html
 examples/**/ops-commands.html
+
+# ...except this one. It is HAND-AUTHORED, and it is the fixture proving the generator refuses to
+# overwrite a dashboard it did not create. Without it in the repo, ownsOwnIndex() finds nothing,
+# Atlas gets a generated page, and the test asserting the file survived passes vacuously — the
+# most important safety rule in the project would be untested on every clone.
+!examples/acme/packages/atlas/index.html
+
 test/tmp/
+examples/**/.test-out/

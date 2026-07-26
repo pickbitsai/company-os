@@ -42,7 +42,8 @@
     "README.md",
     "LICENSE",
     "CONTRIBUTING.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "docs/"
   ],
   "scripts": {
     "build": "node bin/company-os.mjs build",
