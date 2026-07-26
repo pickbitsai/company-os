@@ -56,7 +56,13 @@ export async function collect({ config, manifest, settings = {} }) {
         total: 0,
         agents: {},
         messages: 0,
+        // Session Index does not report a message count for every session — it is absent on
+        // Codex sessions and on older Claude ones. Track how many actually reported, so a sum
+        // built from 1 of 4 sessions is never displayed as if it covered all 4, and "no session
+        // reported" is never displayed as the number zero.
+        messagesReported: 0,
         contextTokens: 0,
+        contextReported: 0,
         lastActivity: null,
         recent: [],
       });
@@ -65,8 +71,10 @@ export async function collect({ config, manifest, settings = {} }) {
     g.total++;
     const agent = s.agent || "unknown";
     g.agents[agent] = (g.agents[agent] || 0) + 1;
-    g.messages += Number(s.metadata?.messages) || 0;
-    g.contextTokens += Number(s.metadata?.contextTokens) || 0;
+    const messages = Number(s.metadata?.messages);
+    if (Number.isFinite(messages)) { g.messages += messages; g.messagesReported++; }
+    const context = Number(s.metadata?.contextTokens);
+    if (Number.isFinite(context)) { g.contextTokens += context; g.contextReported++; }
     const at = s.activityAt || s.updatedAt;
     if (at && (!g.lastActivity || at > g.lastActivity)) g.lastActivity = at;
     // Titles are prompt text — collected only when explicitly enabled (see the header note).
@@ -108,6 +116,22 @@ const ago = (iso) => {
 
 const compact = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n || 0));
 
+/**
+ * Render a summed metric alongside how much of the group it actually covers.
+ *
+ * Nothing reported → an em dash, not zero: "0 messages" for a project with four sessions reads
+ * as "nothing happened here", which is a stronger and wronger claim than "not measured".
+ * Partially reported → the sum plus its coverage, so a total built from one session out of four
+ * cannot be mistaken for the whole.
+ */
+function coverage(sum, reported, total, esc) {
+  if (!reported) return `<span class="chip" title="the scanner reports no count for these sessions">—</span>`;
+  if (reported < total) {
+    return `${compact(sum)} <span style="color:#6f6f8c" title="summed from ${reported} of ${total} sessions; the rest report no count">(${reported}/${total})</span>`;
+  }
+  return compact(sum);
+}
+
 export function render(data, { esc }) {
   if (!data.rows.length) return "";
 
@@ -123,7 +147,7 @@ export function render(data, { esc }) {
       ? `<br>${r.recent.map((s) => `<span class="mono" style="color:#6f6f8c">${esc(s.title.slice(0, 70))}</span>`).join("<br>")}`
       : "";
     return `<tr><td><b>${name}</b>${titles}</td><td class="mono">${r.total}</td><td class="mono">${esc(agents)}</td>
-<td class="mono">${compact(r.messages)}</td><td class="mono">${compact(r.contextTokens)}</td><td class="mono">${esc(ago(r.lastActivity))}</td></tr>`;
+<td class="mono">${coverage(r.messages, r.messagesReported, r.total, esc)}</td><td class="mono">${coverage(r.contextTokens, r.contextReported, r.total, esc)}</td><td class="mono">${esc(ago(r.lastActivity))}</td></tr>`;
   }).join("");
 
   return `<details class="ops-section" id="sessions"><summary>${esc(title)} <span class="section-count">${data.total} sessions · ${data.rows.length} projects</span></summary>
