@@ -5,10 +5,13 @@
 Runs on your machine. Reads your files. Writes static HTML. No telemetry, no account, no uploads, no dependencies.
 
 ```bash
-npm i -D @pickbitsai/company-os
-npx company-os init          # writes a starter company-os.config.mjs
+npm i -D github:pickbitsai/company-os
+npx company-os init          # writes a starter config + empty manifest
 npx company-os build         # writes index.html + one page per project
 ```
+
+The GitHub install works today. The equivalent registry package will be
+`@pickbitsai/company-os` after npm publication.
 
 Try it before configuring anything:
 
@@ -170,7 +173,7 @@ Then `npx company-os build --sites-only` refreshes just those.
 This repo contains no manifest but the fictional one. `npm run leakscan` scans everything in the `files` allowlist for absolute paths, credentials, literal private schema ids, and — if a real manifest happens to be on the machine — that manifest's own ports and task names. It runs on `prepublishOnly`, so a publish cannot skip it.
 
 ```bash
-npm test         # 22 tests; builds the Acme example and asserts on the output
+npm test         # 37 tests; builds the Acme example and asserts on the output
 npm run test:consumer # packs, installs, and runs the CLI as a clean consumer
 npm run leakscan
 npm run preflight  # leakscan + tests + clean-consumer install
