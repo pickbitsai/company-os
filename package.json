@@ -49,8 +49,9 @@
     "build": "node bin/company-os.mjs build",
     "demo": "node bin/company-os.mjs build --config examples/acme",
     "test": "node test/run.mjs",
+    "test:consumer": "node test/consumer-install.mjs",
     "leakscan": "node test/leakscan.mjs",
-    "preflight": "npm run leakscan && npm test",
+    "preflight": "npm run leakscan && npm test && npm run test:consumer",
     "clean": "node test/clean-fixture.mjs",
     "prepack": "npm run clean",
     "prepublishOnly": "npm run preflight"

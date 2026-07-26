@@ -170,9 +170,10 @@ Then `npx company-os build --sites-only` refreshes just those.
 This repo contains no manifest but the fictional one. `npm run leakscan` scans everything in the `files` allowlist for absolute paths, credentials, literal private schema ids, and — if a real manifest happens to be on the machine — that manifest's own ports and task names. It runs on `prepublishOnly`, so a publish cannot skip it.
 
 ```bash
-npm test         # 18 tests; builds the Acme example and asserts on the output
+npm test         # 22 tests; builds the Acme example and asserts on the output
+npm run test:consumer # packs, installs, and runs the CLI as a clean consumer
 npm run leakscan
-npm run preflight  # both
+npm run preflight  # leakscan + tests + clean-consumer install
 ```
 
 ## Design notes

@@ -93,6 +93,6 @@ Use your real ones on the day — check the dashboard before recording. Roughly,
 
 ## Before you hit record
 
-- Run `node C:\new\ops-index\build.mjs` so the numbers are current.
+- Run your local Company OS build so the numbers are current.
 - Decide whether the env panel is on screen at all. If it is, check the frame for project names you'd rather not publish.
 - The Acme example (`npx company-os build --config examples/acme`) is the safe thing to demo — fictional company, no real data, and it's what a viewer sees on their first run anyway.
