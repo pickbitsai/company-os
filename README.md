@@ -10,8 +10,8 @@ npx company-os init          # writes a starter config + empty manifest
 npx company-os build         # writes index.html + one page per project
 ```
 
-The GitHub install works today. The equivalent registry package will be
-`@pickbitsai/company-os` after npm publication.
+GitHub is the immediate distribution channel for this release. The equivalent
+registry package will be `@pickbitsai/company-os` after npm publication.
 
 Try it before configuring anything:
 
