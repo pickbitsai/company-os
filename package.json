@@ -40,7 +40,9 @@
     "schemas/",
     "examples/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "build": "node bin/company-os.mjs build",

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Cross-platform matters here: the scheduler adapters are platform-specific, and the default
+    # adapter is chosen by platform. A Linux-only matrix would never exercise the Windows path.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm test
+
+  leakscan:
+    # The gate between this repo and the private company it was extracted from. It runs on every
+    # PR, not just at publish time, so a manifest cannot arrive in a feature branch unnoticed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run leakscan
+
+  demo:
+    # A fresh clone must render the example with no configuration, no art and no scheduler.
+    # This is the check that the white-label default is a working look rather than a broken one.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node bin/company-os.mjs build --config examples/acme
+      - name: Assert the demo actually rendered
+        run: |
+          test -f examples/acme/index.html
+          grep -q 'class="avatar hair-' examples/acme/index.html
+          grep -q 'company-art:linear-gradient' examples/acme/index.html
+          ! grep -qi 'pickbits' examples/acme/index.html
