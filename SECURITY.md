@@ -34,7 +34,7 @@ This is why panels have hard boundaries:
 - **Session titles are prompt text.** The sessions panel aggregates by default; `showTitles: true` writes recent prompt text into a static file, and the page says so when it is on.
 - **No panel output can reach a `publish` target.**
 
-Reveal, copy and edit of actual secret values is deliberately not in this tool. It links out to [enview](https://github.com/MrPickering/enView), a live localhost server that reads on demand and persists nothing.
+Reveal, copy and edit of actual secret values is deliberately not in this tool. It links out to [enview](https://github.com/pickbitsai/enView), a live localhost server that reads on demand and persists nothing.
 
 ## Optional integrations
 

@@ -1,4 +1,4 @@
-// Environment panel — powered by enview (https://github.com/MrPickering/enView).
+// Environment panel — powered by enview (https://github.com/pickbitsai/enView).
 //
 // PRIVACY CONTRACT, and the reason this panel is safe to render at all: enview reads .env values
 // only to classify them (encrypted? placeholder? credential-shaped name?) and never returns

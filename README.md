@@ -123,7 +123,7 @@ panels: {
 | Panel | Needs | Answers |
 |---|---|---|
 | `docs` | nothing | Which projects have no README, no `CLAUDE.md`, no `AGENTS.md`, or a `.env` with no `.env.example` |
-| `env` | [`enview`](https://github.com/MrPickering/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
+| `env` | [`enview`](https://github.com/pickbitsai/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
 | `sessions` | [Session Index](https://github.com/pickbitsai/session-index) on localhost | Which projects your Claude and Codex sessions actually ran in, and what's worth picking back up |
 
 Panels lead with **what's wrong**, not an inventory. A grid of checkmarks reads as "fine" at a glance even when four projects have no documentation; `⚠ 3 projects have no README` does not.
