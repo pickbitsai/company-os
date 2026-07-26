@@ -84,6 +84,9 @@ export function normalizeConfig(raw, base) {
     scheduler: raw.scheduler,
     // Extra tables rendered in the operations directory, each from a JSON file.
     collections: Array.isArray(raw.collections) ? raw.collections : [],
+    // Optional cross-project panels: { env: {...}, docs: {...}, sessions: {...} }. Each is off
+    // unless present here, and each degrades to nothing if its optional tool is unavailable.
+    panels: raw.panels && typeof raw.panels === "object" ? raw.panels : {},
     // Optional generated-report index (a directory of dated files).
     reports: raw.reports || null,
     // Optional hook returning extra markup for the governance panel (chips, measurements).

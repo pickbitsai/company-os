@@ -365,6 +365,30 @@ ${commandsSection(eng)}`;
     const alertCount = allTaskNames.map(taskRow).filter((t) => !t.missing && t.ok === false && !t.disabled).length;
     const workerCount = Object.keys(governance?.workers || {}).length;
 
+    // Panels contribute their own section, and optionally a hero stat and a nav link.
+    const panels = ctx.panels || [];
+    const panelSections = panels
+      .map(({ panel, data }) => {
+        try {
+          return panel.render(data, { esc, cmdRow }) || "";
+        } catch (error) {
+          console.warn(`panel "${panel.id}" failed to render: ${error.message}`);
+          return "";
+        }
+      })
+      .filter(Boolean)
+      .join("\n    ");
+    const panelStats = panels
+      .filter(({ panel }) => typeof panel.stat === "function")
+      .map(({ panel, data }) => {
+        const s = panel.stat(data);
+        return s ? `<div class="company-stat"><b>${esc(s.value)}</b><span>${esc(s.label)}</span></div>` : "";
+      })
+      .filter(Boolean);
+    const panelNav = panels
+      .filter(({ panel }) => panel.nav)
+      .map(({ panel }) => `<a href="#${esc(panel.id)}">${esc(panel.nav)}</a>`);
+
     const statTiles = [
       `<div class="company-stat"><b>${manifest.engines.length}</b><span>workstations</span></div>`,
       governance ? `<div class="company-stat"><b>${workerCount}</b><span>pinned workers</span></div>` : "",
@@ -375,6 +399,7 @@ ${commandsSection(eng)}`;
         for (const [key, spec] of Object.entries(c.sources || {})) data[key] = loadArray(root, spec);
         return `<div class="company-stat"><b>${c.stat.count(data)}</b><span>${esc(c.stat.label)}</span></div>`;
       }),
+      ...panelStats,
     ].filter(Boolean).join("");
 
     const navLinks = [
@@ -383,6 +408,7 @@ ${commandsSection(eng)}`;
       `<a href="#projects">Project pulse</a>`,
       `<a href="#schedules">Schedules</a>`,
       ...(config.collections || []).filter((c) => c.nav).map((c) => `<a href="#${esc(c.id)}">${esc(c.nav)}</a>`),
+      ...panelNav,
       `<a href="#satellites">Network</a>`,
     ].filter(Boolean).join("");
 
@@ -407,6 +433,7 @@ ${commandsSection(eng)}`;
     <details class="ops-section" id="projects" open><summary>Project pulse <span class="section-count">${projectContractCount} structured feeds · ${manifest.engines.length - projectContractCount} derived pages</span></summary><div class="table-shell"><table><tr><th>Project</th><th>Updated</th><th>What changed</th><th>TODOs</th><th>Security</th></tr>${projectRows}</table></div></details>
     <details class="ops-section" id="schedules" open><summary>${esc(brand.schedulesTitle)} <span class="section-count">${allTaskNames.length} jobs · live state</span></summary><div class="table-shell"><table><tr><th>Task</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>State</th></tr>${schedTable}</table></div></details>
     ${collectionSections}
+    ${panelSections}
     <details class="ops-section" id="satellites"><summary>Satellites & sites <span class="section-count">${manifest.satellites?.length || 0} connected properties</span></summary><div class="table-shell"><table><tr><th>What</th><th>Note</th><th>Where</th></tr>${satellites}</table></div>${satelliteCommands ? `<div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">Satellites have no engine page — their npm commands, read live from each package.json:</p><div class="scripts">${satelliteCommands}</div></div>` : ""}</details>
     ${reportRows ? `<details class="ops-section"><summary>${esc(reportsTitle)} <span class="section-count">latest 5 reports</span></summary><div class="table-shell"><table><tr><th>Target</th><th>Date</th><th>Report</th></tr>${reportRows}</table></div></details>` : ""}
     <details class="ops-section"><summary>Refresh this snapshot <span class="section-count">generator-safe</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${cmdRow(config.rebuildCommand)}</div></details>

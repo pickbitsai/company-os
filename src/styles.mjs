@@ -50,7 +50,11 @@ a{color:var(--cyan)}
 .script-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:9px;padding:4px 13px 13px;border-top:1px solid var(--line)}
 .script{min-width:0}
 .script-impl{margin:4px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6f6f8c;font-size:10.5px}
-.script .chips{margin-top:5px}`;
+.script .chips{margin-top:5px}
+.gap-list{margin:0;padding-left:18px;color:#cfcfe6;font-size:12.5px}
+.gap-list li{margin:0 0 8px}
+.gap-list li b{color:var(--amber)}
+.gap-list .mono{color:#8a8aa0;font-size:11px}`;
 
 // Built-in gradient backdrops. Deliberately abstract: they must read as "a place" behind
 // frosted panels without implying any particular company's art direction.

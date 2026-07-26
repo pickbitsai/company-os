@@ -52,5 +52,13 @@
     "prepack": "npm run clean",
     "prepublishOnly": "npm run preflight"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "peerDependencies": {
+    "enview": ">=0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "enview": {
+      "optional": true
+    }
+  }
 }

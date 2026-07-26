@@ -179,6 +179,45 @@ await test("cron adapter parses schedules and reports no false outcome", async (
   assert.equal(typeof mod.loadTasks, "function");
 });
 
+// ---------------------------------------------------------------- panels
+await test("docs panel reports gaps, not just an inventory", () => {
+  const floor = page("index.html");
+  const section = floor.match(/id="docs"[\s\S]*?<\/details>/)[0];
+  assert.match(section, /no README/, "Acme ships no READMEs, so that gap must be reported");
+  assert.match(section, /Signal/, "and must name the projects");
+  // The matrix is still there underneath.
+  assert.match(section, /<th>README<\/th>/);
+});
+
+await test("docs panel only flags .env.example where a .env exists", () => {
+  // No Acme project has a .env, so that gap must not fire — otherwise every project in every
+  // company gets a permanent finding it cannot action.
+  const section = page("index.html").match(/id="docs"[\s\S]*?<\/details>/)[0];
+  assert.ok(!section.includes(".env.example"), "no .env anywhere, so no .env.example gap");
+});
+
+await test("an unconfigured panel renders nothing at all", () => {
+  const floor = page("index.html");
+  assert.ok(!floor.includes(`id="env"`), "env panel is not configured for the example");
+  assert.ok(!floor.includes(`id="sessions"`), "sessions panel is not configured for the example");
+});
+
+await test("a panel whose optional tool is missing is skipped, not fatal", async () => {
+  // The env panel needs enview. Point it at a config that enables it and assert the build still
+  // completes — an optional integration must never be able to break the dashboard.
+  const warnings = [];
+  const withEnv = { ...config, panels: { env: {} }, outDir: join(ACME, ".test-out") };
+  const out = await build(withEnv, { argv: [], log: () => {}, warn: (m) => warnings.push(m) });
+  assert.ok(out.written.length > 0, "build still produced pages");
+  const floor = readFileSync(join(ACME, ".test-out", "index.html"), "utf8");
+  // Either enview resolved (panel present) or it did not (warned and omitted). Both are fine;
+  // what must never happen is a thrown build.
+  if (!floor.includes(`id="env"`)) {
+    assert.ok(warnings.some((w) => /env/.test(w)), "a skipped panel must say so");
+  }
+  rmSync(join(ACME, ".test-out"), { recursive: true, force: true });
+});
+
 // ---------------------------------------------------------------- summary
 console.log(`\n${failures.length ? `FAIL — ${failures.length} of ${passed + failures.length}` : `PASS — ${passed} tests`}`);
 if (failures.length) {

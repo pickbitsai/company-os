@@ -108,6 +108,53 @@ scheduler: {
 
 **On honesty about state.** cron reports no exit code, so its adapter returns `ok: null` and the page shows a neutral *registered* chip — never a green pass for something nothing measured. With `scheduler: "none"`, declared tasks read *declared in manifest*, not *not registered*: nothing was read, so nothing can be missing. An indicator that cannot fail isn't an indicator, and a green light for an unmeasured thing is worse than no light.
 
+## Panels — the cross-project views
+
+Panels answer one question across every project at once. Each is off unless configured, and each degrades to nothing when the tool it needs is absent — the same contract as scheduler adapters, for the same reason: a dashboard that half-works beats one that refuses to build because an optional tool isn't installed.
+
+```js
+panels: {
+  docs: {},                                          // no dependencies
+  env: { roots: ["."], showKeyNames: false },        // needs: npm i enview
+  sessions: { url: "http://127.0.0.1:4173" },        // needs: Session Index running
+}
+```
+
+| Panel | Needs | Answers |
+|---|---|---|
+| `docs` | nothing | Which projects have no README, no `CLAUDE.md`, no `AGENTS.md`, or a `.env` with no `.env.example` |
+| `env` | [`enview`](https://github.com/MrPickering/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
+| `sessions` | [Session Index](https://github.com/pickbitsai/session-index) on localhost | Which projects your Claude and Codex sessions actually ran in, and what's worth picking back up |
+
+Panels lead with **what's wrong**, not an inventory. A grid of checkmarks reads as "fine" at a glance even when four projects have no documentation; `⚠ 3 projects have no README` does not.
+
+### What panels will not show you
+
+These read genuinely sensitive material, so the boundaries are deliberate and worth knowing:
+
+- **Secret values are never read into the page.** enview reads values only to classify them (encrypted? placeholder? credential-shaped name?) and discards them. What reaches the panel is names, counts and status. Key *names* are further gated behind `showKeyNames: true`, because a name still tells a reader which services you use.
+- **Session titles are prompt text.** `title` and `about` are derived from the words you typed, so the panel renders aggregates by default — counts, agent split, last activity. `showTitles: true` writes recent prompt text into a static HTML file on disk; the panel says so on the page when it's on.
+- **No panel output can reach a `publish` target.** The public projection is a separate allowlist that has no knowledge of panels.
+
+### Writing your own
+
+A panel is a module with `collect()` and `render()`:
+
+```js
+panels: {
+  deploys: {
+    id: "deploys",
+    title: "Recent deploys",
+    collect: async ({ config, manifest }) => fetchDeploys(manifest),
+    render: (data, { esc }) => `<details class="ops-section" id="deploys">…</details>`,
+    stat: (data) => ({ label: "deploys today", value: data.today }),
+    nav: "Deploys",
+  },
+}
+```
+
+`collect` may be async and may throw — a throw disables that panel with a warning and never fails the build.
+
 ## Publishing a safe subset
 
 If a public site should show what your company does without exposing how it runs, declare a `publish` target. The projection is an **allowlist** — id, name, class, role, ingress, egress, and stage *names*. Never commands, ports, task names, paths, or logs. Adding a field to your manifest cannot leak it; someone has to add it to the projection on purpose. Free-text `ingress`/`egress` entries are additionally dropped if they contain anything path-shaped, because internal prose mentions real paths.
