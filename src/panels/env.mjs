@@ -83,7 +83,17 @@ export async function collect({ config, manifest, settings = {} }) {
   }
   rows.sort((a, b) => b.sensitiveCount - a.sensitiveCount || a.project.localeCompare(b.project));
 
-  return { rows, findings: audit.findings, summary: audit.summary, showKeys };
+  return {
+    rows,
+    findings: audit.findings,
+    summary: audit.summary,
+    showKeys,
+    // The dashboard is a static file, so it deliberately stops at status and counts. Anything
+    // that needs a value — reveal, copy, edit — happens in the enview UI, which is a live
+    // localhost server that reads on demand and persists nothing. This is the tunnel.
+    uiUrl: settings.uiUrl || "http://127.0.0.1:4174",
+    uiCommand: settings.uiCommand || `npx enview ui ${roots.map((r) => `"${r}"`).join(" ")}`,
+  };
 }
 
 export function stat(data) {
@@ -99,7 +109,7 @@ const age = (d) => {
   return `${Math.floor(days / 365)}y ago`;
 };
 
-export function render(data, { esc }) {
+export function render(data, { esc, cmdRow }) {
   if (!data.rows.length) return "";
 
   const exposed = data.rows.reduce((n, r) => n + r.sensitiveCount, 0);
@@ -138,7 +148,9 @@ export function render(data, { esc }) {
 
   return `<details class="ops-section" id="env"${unignored.length ? " open" : ""}><summary>${esc(title)} <span class="section-count">${data.rows.length} env file${data.rows.length === 1 ? "" : "s"} · ${exposed} plaintext credential${exposed === 1 ? "" : "s"}</span></summary>
 <div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${lead}
-<p class="doc mono">Scanned by enview. Key <b>values are never read into this page</b> — only names, counts and status.</p></div>
+<p class="doc">This page is a static file, so it stops at status and counts — <b>no values, and no key names, are ever written into it</b>. To reveal, copy or edit a value, open the enview manager: a localhost server that reads on demand, persists nothing, and writes a timestamped backup before every change.</p>
+<div class="chips"><span class="chip chip-link"><a href="${esc(data.uiUrl)}">open enview manager →</a></span></div>
+${cmdRow(data.uiCommand)}</div>
 <div class="table-shell"><table><tr><th>Project</th><th>File</th><th>Env</th><th>Keys</th><th>Credential-shaped</th><th>Encrypted</th><th>git</th><th>Modified</th></tr>${rows}</table></div>
 ${keyDetail ? `<div style="padding:12px 16px"><div class="scripts">${keyDetail}</div></div>` : ""}</details>`;
 }
