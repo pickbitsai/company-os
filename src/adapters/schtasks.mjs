@@ -9,6 +9,13 @@ import { execFileSync } from "node:child_process";
 export const id = "schtasks";
 export const platforms = ["win32"];
 
+// "Repeat: Every" is only meaningful when the task repeats WITHIN its trigger. For a plain
+// daily task schtasks fills it with "Disabled"; other locales/versions use "N/A" or "None".
+const repeatEvery = (v) => {
+  const s = (v || "").trim();
+  return !s || /^(disabled|n\/?a|none)$/i.test(s) ? "" : `every ${s}`;
+};
+
 export function loadTasks() {
   const out = execFileSync("schtasks", ["/query", "/fo", "CSV", "/v"], {
     encoding: "utf8",
@@ -35,7 +42,11 @@ export function loadTasks() {
       ok: rc === "0" || rc === "267009" || rc === "267011",
       running: rec.Status === "Running",
       disabled: rec["Scheduled Task State"] === "Disabled",
-      schedule: [rec["Schedule Type"], rec["Start Time"], rec["Repeat: Every"] && `every ${rec["Repeat: Every"]}`]
+      // schtasks reports absent fields as the literal strings "Disabled" / "N/A", both of
+      // which are truthy — a plain `&&` guard rendered a daily task as "Daily · every
+      // Disabled". Blank them explicitly, and trim: "Schedule Type" arrives padded ("Daily ").
+      schedule: [rec["Schedule Type"], rec["Start Time"], repeatEvery(rec["Repeat: Every"])]
+        .map((s) => (s || "").trim())
         .filter(Boolean)
         .join(" · "),
     });
