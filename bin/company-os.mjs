@@ -3,7 +3,7 @@
 //   company-os build                        # find company-os.config.mjs upward from cwd
 //   company-os build --config path/to/dir   # or a direct path to a config file
 //   company-os build --sites-only           # refresh publish targets only, skip the HTML
-//   company-os init                         # write a starter config next to you
+//   company-os init                         # write a starter config and empty manifest
 
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -64,14 +64,20 @@ export default {
 };
 `;
 
+const STARTER_MANIFEST = `${JSON.stringify({ engines: [] }, null, 2)}\n`;
+
 if (command === "init") {
   const target = join(cwd(), "company-os.config.mjs");
+  const manifestTarget = join(cwd(), "engines.json");
   if (existsSync(target)) {
     console.error(`refusing to overwrite ${target}`);
     exit(1);
   }
   writeFileSync(target, STARTER);
-  console.log(`wrote ${target}\nNext: create engines.json, then run \`company-os build\`.`);
+  const manifestStatus = existsSync(manifestTarget)
+    ? `kept existing ${manifestTarget}`
+    : (writeFileSync(manifestTarget, STARTER_MANIFEST), `wrote ${manifestTarget}`);
+  console.log(`wrote ${target}\n${manifestStatus}\nNext: run \`company-os build\`.`);
   exit(0);
 }
 
