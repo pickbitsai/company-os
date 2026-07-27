@@ -13,10 +13,17 @@ npx company-os build         # writes index.html + one page per project
 GitHub is the immediate distribution channel for this release. The equivalent
 registry package will be `@pickbitsai/company-os` after npm publication.
 
-Try it before configuring anything:
+> **Always install first, or name the repo explicitly.** An unrelated package
+> called `company-os` exists on npm and ships a binary of the same name, so a
+> bare `npx company-os` on a machine that hasn't installed this one will fetch
+> and run *that* instead. The `npx` lines above are safe because they follow the
+> install on line 1 and resolve to your local `node_modules/.bin`.
+
+Try it before configuring anything — this form needs no install and cannot
+resolve to the wrong package:
 
 ```bash
-npx company-os build --config examples/acme
+npx github:pickbitsai/company-os build --config examples/acme
 ```
 
 ## Why this exists
