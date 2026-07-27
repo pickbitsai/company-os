@@ -21,8 +21,12 @@ const ALLOWED_FILES = new Set(["LICENSE", "README.md"]);
 // The publisher's own identity is not a leak: this package is named and hosted by pickbitsai,
 // so those exact strings are expected anywhere. Removed before matching so that any OTHER
 // mention of the private company still trips the rule.
+// An `@pickbitsai/<name>` npm specifier is a PUBLIC package identifier by construction — a scope
+// is how strangers install the thing. Allowing the whole scope (rather than listing siblings one
+// at a time) is why the optional `@pickbitsai/enview` peer dependency can be named in source.
+// It is still narrow: a bare "PickBits" or "pickbits-daily" outside a package specifier trips.
 const OWN_IDENTITY = [
-  /@pickbitsai\/company-os/g,
+  /@pickbitsai\/[\w.-]+/g,
   /(?:github\.com|npmjs\.com\/package)\/(?:@)?pickbitsai(?:\/[\w.-]+)?/g,
   /PickBits\.AI(?= |$|\.)/g,
 ];
