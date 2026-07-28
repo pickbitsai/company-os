@@ -5,15 +5,25 @@
 Runs on your machine. Reads your files. Writes static HTML. No telemetry, no account, no uploads, no dependencies.
 
 ```bash
-npm i -D @pickbitsai/company-os
-npx company-os init          # writes a starter company-os.config.mjs
+npm i -D github:pickbitsai/company-os
+npx company-os init          # writes a starter config + empty manifest
 npx company-os build         # writes index.html + one page per project
 ```
 
-Try it before configuring anything:
+GitHub is the immediate distribution channel for this release. The equivalent
+registry package will be `@pickbitsai/company-os` after npm publication.
+
+> **Always install first, or name the repo explicitly.** An unrelated package
+> called `company-os` exists on npm and ships a binary of the same name, so a
+> bare `npx company-os` on a machine that hasn't installed this one will fetch
+> and run *that* instead. The `npx` lines above are safe because they follow the
+> install on line 1 and resolve to your local `node_modules/.bin`.
+
+Try it before configuring anything — this form needs no install and cannot
+resolve to the wrong package:
 
 ```bash
-npx company-os build --config examples/acme
+npx github:pickbitsai/company-os build --config examples/acme
 ```
 
 ## Why this exists
@@ -123,7 +133,7 @@ panels: {
 | Panel | Needs | Answers |
 |---|---|---|
 | `docs` | nothing | Which projects have no README, no `CLAUDE.md`, no `AGENTS.md`, or a `.env` with no `.env.example` |
-| `env` | [`enview`](https://github.com/MrPickering/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
+| `env` | [`enview`](https://github.com/pickbitsai/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
 | `sessions` | [Session Index](https://github.com/pickbitsai/session-index) on localhost | Which projects your Claude and Codex sessions actually ran in, and what's worth picking back up |
 
 Panels lead with **what's wrong**, not an inventory. A grid of checkmarks reads as "fine" at a glance even when four projects have no documentation; `⚠ 3 projects have no README` does not.
@@ -170,9 +180,10 @@ Then `npx company-os build --sites-only` refreshes just those.
 This repo contains no manifest but the fictional one. `npm run leakscan` scans everything in the `files` allowlist for absolute paths, credentials, literal private schema ids, and — if a real manifest happens to be on the machine — that manifest's own ports and task names. It runs on `prepublishOnly`, so a publish cannot skip it.
 
 ```bash
-npm test         # 18 tests; builds the Acme example and asserts on the output
+npm test         # 37 tests; builds the Acme example and asserts on the output
+npm run test:consumer # packs, installs, and runs the CLI as a clean consumer
 npm run leakscan
-npm run preflight  # both
+npm run preflight  # leakscan + tests + clean-consumer install
 ```
 
 ## Design notes
