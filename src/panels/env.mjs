@@ -19,19 +19,33 @@ export const nav = "Secrets";
 
 // Resolve the optional dependency from the CONSUMER's directory, not this package's.
 //
-// The consumer installs enview, so that is where it lives. A bare `import("enview")` resolves
-// relative to this file, which fails whenever company-os is symlinked (npm link, a file:
-// dependency, a monorepo) — Node resolves the real path first, landing outside the project that
-// installed the dep. Trying the config directory first fixes that, and the bare specifier still
-// covers the ordinary nested-node_modules case.
+// The consumer installs enview, so that is where it lives. A bare
+// `import("@pickbitsai/enview")` resolves relative to this file, which fails whenever company-os
+// is symlinked (npm link, a file: dependency, a monorepo) — Node resolves the real path first,
+// landing outside the project that installed the dep. Trying the config directory first fixes
+// that, and the bare specifier still covers the ordinary nested-node_modules case.
+//
+// Both the scoped name and the bare one are tried: the package is published as
+// `@pickbitsai/enview` (npm rejects the unscoped `enview` as too close to `envify`/`iview`), but
+// a local checkout wired up with `file:` may still resolve under the old name.
+const ENVIEW_SPECIFIERS = ["@pickbitsai/enview", "enview"];
+
 async function loadEnview(configDir) {
-  try {
-    const { createRequire } = await import("node:module");
-    const { pathToFileURL } = await import("node:url");
-    const require = createRequire(pathToFileURL(`${configDir}/package.json`));
-    return await import(pathToFileURL(require.resolve("enview")).href);
-  } catch {}
-  return await import("enview");
+  const { createRequire } = await import("node:module");
+  const { pathToFileURL } = await import("node:url");
+  const require = createRequire(pathToFileURL(`${configDir}/package.json`));
+
+  for (const spec of ENVIEW_SPECIFIERS) {
+    try {
+      return await import(pathToFileURL(require.resolve(spec)).href);
+    } catch {}
+  }
+  for (const spec of ENVIEW_SPECIFIERS) {
+    try {
+      return await import(spec);
+    } catch {}
+  }
+  throw new Error(`enview not resolvable as any of: ${ENVIEW_SPECIFIERS.join(", ")}`);
 }
 
 export async function collect({ config, manifest, settings = {} }) {
