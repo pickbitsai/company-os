@@ -5,7 +5,8 @@
 // does, so a break shows up as a wrong page rather than a failed mock.
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build, loadConfig } from "../src/index.mjs";
@@ -216,6 +217,190 @@ await test("a panel whose optional tool is missing is skipped, not fatal", async
     assert.ok(warnings.some((w) => /env/.test(w)), "a skipped panel must say so");
   }
   rmSync(join(ACME, ".test-out"), { recursive: true, force: true });
+});
+
+
+// ---------------------------------------------------------------- env panel privacy contract
+// The highest-consequence panel in the package: it reads .env files, and its output is a static
+// HTML file that gets committed and screenshotted. The contract is that VALUES never reach the
+// page and key NAMES only when explicitly asked for. Both halves are asserted against a stub
+// enview, because "we reviewed it carefully" is not a regression test.
+console.log("\n--- env panel privacy ---");
+
+const SECRET_VALUE = "sk-live-THIS-MUST-NEVER-RENDER";
+const SECRET_NAME = "STRIPE_SECRET_KEY";
+
+// The stub deliberately hands the panel MORE than the real enview would, including a raw value.
+// If the panel ever starts rendering what it is handed, this fixture makes it visible.
+function enviewFixture() {
+  const dir = mkdtempSync(join(tmpdir(), "company-os-enview-"));
+  const pkg = join(dir, "node_modules", "@pickbitsai", "enview");
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture", private: true }));
+  writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@pickbitsai/enview", version: "0.2.0", main: "index.mjs" }));
+  writeFileSync(join(pkg, "index.mjs"), [
+    "export function scanProjects() {",
+    "  return [{ name: 'signal', files: [{",
+    "    projectDir: 'packages/signal', fileName: '.env', environment: 'development',",
+    `    keys: ['${SECRET_NAME}', 'PORT', 'DEBUG'],`,
+    `    plaintextKeys: ['${SECRET_NAME}'], encryptedKeys: [], sensitiveKeys: ['${SECRET_NAME}'],`,
+    `    values: { ${SECRET_NAME}: '${SECRET_VALUE}' },`,
+    "    encryption: { type: 'none' },",
+    "    gitIgnored: true, gitTracked: false, gitInHistory: false, inGitRepo: true,",
+    "    modifiedAt: new Date().toISOString(),",
+    "  }] }];",
+    "}",
+    "export function auditProjects() { return { findings: [], summary: {} }; }",
+  ].join("\n"));
+  return dir;
+}
+
+async function buildWithEnv(settings) {
+  const dir = enviewFixture();
+  const out = join(ACME, ".test-env");
+  await build({ ...config, configDir: dir, panels: { env: settings }, outDir: out },
+    { argv: [], log: () => {}, warn: () => {} });
+  const floor = readFileSync(join(out, "index.html"), "utf8");
+  rmSync(out, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true });
+  return floor;
+}
+
+await test("env panel never writes a secret value into the page", async () => {
+  const floor = await buildWithEnv({});
+  assert.ok(floor.includes('id="env"'), "the stub enview should resolve, so the panel must render");
+  assert.ok(!floor.includes(SECRET_VALUE), "a .env VALUE reached the generated page");
+});
+
+await test("key names are withheld unless showKeyNames is explicitly on", async () => {
+  const floor = await buildWithEnv({});
+  assert.ok(!floor.includes(SECRET_NAME), "a credential-shaped key NAME rendered without showKeyNames");
+  assert.ok(floor.includes("Key names are not written into it either"),
+    "the page must state the guarantee it is actually keeping");
+});
+
+await test("showKeyNames reveals names, still no values, and the page stops claiming otherwise", async () => {
+  const floor = await buildWithEnv({ showKeyNames: true });
+  assert.ok(floor.includes(SECRET_NAME), "showKeyNames was on but no key name rendered");
+  assert.ok(!floor.includes(SECRET_VALUE), "a .env VALUE reached the page even with only names enabled");
+  // The page used to assert "no key names are ever written into it" while writing them directly
+  // below. A page that lies about its own privacy posture is worse than one that says nothing.
+  assert.ok(!floor.includes("Key names are not written into it either"),
+    "the page claimed it withholds key names while rendering them");
+});
+
+
+// ---------------------------------------------------------------- policy panel
+// This panel renders a snapshot produced by something else, so every test here is about what it
+// does when that snapshot is old, incomplete, or absent. A panel that renders a stale or
+// unmeasured report as current is the exact failure this project is organized against.
+console.log("\n--- policy panel ---");
+
+const NOW = "2026-03-10T12:00:00.000Z";
+const FULL_REPORT = {
+  date: NOW,
+  applied: false,
+  scanned: 12,
+  ungoverned: ["sketch"],
+  repos: [
+    { name: "signal", branch: "main", onProtected: true, governed: true, dirty: 4, unpushed: [] },
+    { name: "forge", branch: "agent/gates", onProtected: false, governed: true, dirty: 0,
+      unpushed: [{ branch: "agent/gates", reason: "2 commits ahead of origin/agent/gates", quiet: true }] },
+    { name: "sketch", branch: "main", onProtected: true, governed: false, dirty: 0, unpushed: [] },
+    { name: "unrelated-repo", branch: "main", onProtected: true, governed: true, dirty: 9, unpushed: [] },
+  ],
+  proposals: [
+    { name: "forge", branch: "agent/gates", reason: "2 commits ahead", note: "add to sweep.pushAndPr to authorize" },
+    { name: "signal", branch: "spike", reason: "branch never pushed", note: "add to sweep.pushAndPr to authorize" },
+  ],
+  accepted: [{ name: "atlas", branch: "claude/old-idea", reason: "branch never pushed" }],
+  actions: [],
+  errors: [],
+};
+
+const policyPanel = await import("../src/panels/policy.mjs");
+const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const renderPolicy = (data) => policyPanel.render(data, { esc: escHtml });
+
+function reportFixture(report) {
+  const dir = mkdtempSync(join(tmpdir(), "company-os-closeout-"));
+  writeFileSync(join(dir, "2026-03-10.json"), JSON.stringify(report));
+  return dir;
+}
+
+async function policyData(report, nowIso = NOW) {
+  const dir = reportFixture(report);
+  try {
+    return policyPanel.collect({ config: { configDir: dir }, manifest, settings: { reports: dir }, nowIso });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+await test("policy panel separates protected-branch, governance and authorization findings", async () => {
+  const data = await policyData(FULL_REPORT);
+  const keys = data.findings.map((f) => f.key);
+  assert.ok(keys.includes("protected"), "a dirty tree on a protected branch is a finding");
+  assert.ok(keys.includes("ungoverned"), "a repo with no hooks installed is a finding");
+  assert.ok(keys.includes("unauthorized"), "a proposal nobody can act on is its own category");
+  const ungoverned = data.findings.find((f) => f.key === "ungoverned");
+  assert.deepEqual(ungoverned.names, ["sketch"]);
+});
+
+await test("a report that never measured coverage reports absence, never zero", async () => {
+  const { scanned, ungoverned, ...older } = FULL_REPORT;
+  const data = await policyData(older);
+  assert.equal(data.measuresCoverage, false);
+  assert.equal(data.scanned, null, "an unmeasured count must be null, not 0");
+  assert.ok(!data.findings.some((f) => f.key === "ungoverned"),
+    "absent coverage must not render as a clean bill of health");
+  const html = renderPolicy(data);
+  assert.match(html, /coverage not measured/);
+});
+
+await test("a stale report is labelled stale rather than presented as current", async () => {
+  const fresh = await policyData(FULL_REPORT);
+  assert.equal(fresh.stale, false);
+  const old = await policyData(FULL_REPORT, "2026-03-14T12:00:00.000Z"); // 96h later
+  assert.equal(old.stale, true);
+  assert.match(renderPolicy(old), /stale/);
+});
+
+await test("accepted debt is counted, never raised as a finding", async () => {
+  const data = await policyData(FULL_REPORT);
+  assert.equal(data.acceptedCount, 1);
+  assert.ok(!data.findings.some((f) => /debt/i.test(f.message)), "debt is a number, not an alert");
+  assert.match(renderPolicy(data), /accepted as debt/);
+  const { accepted, ...noDebt } = FULL_REPORT;
+  const blind = await policyData(noDebt);
+  assert.equal(blind.acceptedCount, null, "a report that never tracked debt must not read as zero debt");
+  assert.ok(!/accepted as debt/.test(renderPolicy(blind)));
+});
+
+await test("engines are rowed, unrelated repos are counted, and silent engines are named", async () => {
+  const data = await policyData(FULL_REPORT);
+  const rowed = data.engineRows.map((r) => r.engineName).sort();
+  assert.deepEqual(rowed, ["Forge", "Signal", "Sketch"], "manifest engines get rows");
+  assert.equal(data.otherWithFindings, 1, "repos outside the manifest are a count, not rows");
+  assert.ok(data.unreportedEngines.includes("Atlas"),
+    "an engine the report never mentioned must be named, since clean and not-a-repo look identical");
+  // An engine cannot simultaneously have a row and be absent from the report. The two lists are
+  // complements; if they ever overlap the panel is telling two stories about the same project.
+  assert.deepEqual(
+    rowed.filter((name) => data.unreportedEngines.includes(name)), [],
+    "no engine may appear both as a row and as unreported",
+  );
+});
+
+await test("a missing closeout report disables the panel instead of failing the build", async () => {
+  const warnings = [];
+  const out = join(ACME, ".test-policy");
+  const built = await build({ ...config, panels: { policy: { reports: "./no-such-directory" } }, outDir: out },
+    { argv: [], log: () => {}, warn: (m) => warnings.push(m) });
+  assert.ok(built.written.length > 0, "the build must still produce pages");
+  assert.ok(!readFileSync(join(out, "index.html"), "utf8").includes('id="policy"'));
+  assert.ok(warnings.some((w) => /policy/.test(w)), "a skipped panel must say so");
+  rmSync(out, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------- shape panel
