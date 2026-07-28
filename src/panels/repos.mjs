@@ -10,6 +10,7 @@
 //   { date, scanned, ungoverned: [name],
 //     repos:      [{ name, branch, onProtected, governed, dirty, unpushed: [{branch, reason, quiet}] }],
 //     proposals:  [{ name, branch, reason, note }],
+//     accepted:   [{ name, branch, reason }],
 //     actions: [], errors: [] }
 //
 // ABSENT DATA IS SHOWN AS ABSENT, in three specific ways this panel is responsible for:
@@ -63,6 +64,9 @@ export function collect({ config, manifest, settings = {}, nowIso }) {
   const measuresCoverage = typeof report.scanned === "number" && Array.isArray(report.ungoverned);
   const repos = Array.isArray(report.repos) ? report.repos : [];
   const proposals = Array.isArray(report.proposals) ? report.proposals : [];
+  // Accepted debt postdates the first producer too, so its absence is null, not zero — a report
+  // that never tracked debt must not render as a company carrying none.
+  const accepted = Array.isArray(report.accepted) ? report.accepted : null;
 
   // Engines are the curated set the rest of the dashboard is about. Everything else under the
   // scanned root is real and worth a number, but not worth ninety rows.
@@ -132,6 +136,8 @@ export function collect({ config, manifest, settings = {}, nowIso }) {
     otherWithFindings,
     unreportedEngines,
     findings,
+    acceptedCount: accepted ? accepted.length : null,
+    acceptedRepos: accepted ? [...new Set(accepted.map((a) => a.name))] : [],
     proposalCount: proposals.length,
     actionCount: Array.isArray(report.actions) ? report.actions.length : 0,
   };
@@ -183,6 +189,11 @@ export function render(data, { esc }) {
   }).join("");
 
   const footNotes = [];
+  // Debt is reported, never alerted. It is a standing decision someone already made, so it gets a
+  // number you can watch grow — not a line item that asks to be dealt with again every morning.
+  if (data.acceptedCount) {
+    footNotes.push(`${data.acceptedCount} branch${data.acceptedCount === 1 ? "" : "es"} accepted as debt in <span class="mono">${data.acceptedRepos.map(esc).join(" · ")}</span> — counted, not proposed.`);
+  }
   if (data.otherWithFindings) {
     footNotes.push(`${data.otherWithFindings} repo${data.otherWithFindings === 1 ? "" : "s"} outside the manifest also have loose work.`);
   }
@@ -191,7 +202,7 @@ export function render(data, { esc }) {
   }
 
   const findingCount = data.findings.reduce((n, f) => n + f.names.length, 0);
-  return `<details class="ops-section" id="repos"${findingCount ? " open" : ""}><summary>${esc(title)} <span class="section-count">${findingCount ? `${findingCount} finding${findingCount === 1 ? "" : "s"}` : "clear"} · ${data.proposalCount} proposals</span></summary>
+  return `<details class="ops-section" id="repos"${findingCount ? " open" : ""}><summary>${esc(title)} <span class="section-count">${findingCount ? `${findingCount} finding${findingCount === 1 ? "" : "s"}` : "clear"} · ${data.proposalCount} proposals${data.acceptedCount ? ` · ${data.acceptedCount} debt` : ""}</span></summary>
 <div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${provenance}${findingList}</div>
 ${rows ? `<div class="table-shell"><table><tr><th>Project</th><th>Branch</th><th>Working tree</th><th>Unpushed</th><th>Policy</th></tr>${rows}</table></div>` : ""}
 ${footNotes.length ? `<div style="padding:10px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">${footNotes.join(" ")}</p></div>` : ""}</details>`;
