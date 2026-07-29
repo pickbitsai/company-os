@@ -38,9 +38,14 @@ try {
     JSON.stringify({ name: "company-os-consumer-smoke", private: true }, null, 2),
   );
 
-  const packed = JSON.parse(
+  // `npm pack --json` changed shape: npm 11.2 emits an ARRAY of pack results, newer npm emits an
+  // OBJECT keyed by package name. This test is the release gate, and release.yml installs
+  // npm@latest for OIDC trusted publishing while ci.yml uses the runner's bundled npm — so the
+  // two jobs ran different npms, CI stayed green, and only the publish failed. Accept both.
+  const packedRaw = JSON.parse(
     runNpm(["pack", "--json", "--ignore-scripts", "--pack-destination", sandbox], root),
   );
+  const packed = Array.isArray(packedRaw) ? packedRaw : Object.values(packedRaw);
   assert.equal(packed.length, 1, "npm pack should produce exactly one tarball");
   const tarball = join(sandbox, basename(packed[0].filename));
   assert.ok(existsSync(tarball), `missing packed tarball: ${tarball}`);
