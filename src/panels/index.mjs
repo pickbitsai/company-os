@@ -24,6 +24,9 @@
 const BUILTINS = {
   env: () => import("./env.mjs"),
   docs: () => import("./docs.mjs"),
+  gtm: () => import("./gtm.mjs"),
+  intranet: () => import("./intranet.mjs"),
+  repos: () => import("./repos.mjs"),
   sessions: () => import("./sessions.mjs"),
   shape: () => import("./shape.mjs"),
 };

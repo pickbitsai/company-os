@@ -1,0 +1,4 @@
+interface:
+  display_name: "Company OS Portfolio GTM"
+  short_description: "Build evidence-led portfolio GTM strategies"
+  default_prompt: "Use $company-os-portfolio-gtm to create or refresh an evidence-led GTM plan for the projects in this Company OS."

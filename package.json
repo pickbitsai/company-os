@@ -38,6 +38,7 @@
     "bin/",
     "src/",
     "schemas/",
+    "skills/",
     "examples/",
     "README.md",
     "LICENSE",

@@ -8,7 +8,19 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build, loadConfig } from "../src/index.mjs";
+import {
+  BUNDLED_SKILLS,
+  build,
+  deriveStatus,
+  discoverIntranet,
+  installBundledSkill,
+  installIntranetAgentRules,
+  loadConfig,
+  maintainIntranet,
+  readBundledSkill,
+  writeIntranetRegistry,
+} from "../src/index.mjs";
+import { INTRANET_SKILL } from "../src/intranet.mjs";
 import { publicFacts, publicSnapshot } from "../src/publish.mjs";
 import { scanScripts, wiredScripts } from "../src/scripts.mjs";
 import { companyCss } from "../src/styles.mjs";
@@ -111,7 +123,11 @@ await test("with no scheduler, declared tasks are not reported as missing", () =
 await test("a station is not marked alert because of unobserved tasks", () => {
   const floor = page("index.html");
   const signalCard = floor.match(/<article class="station ([a-z-]+)"[^>]*aria-label="Signal[^"]*"/);
-  assert.equal(signalCard[1], "is-healthy", "unobserved is not failing");
+  // Assert the actual claim — unobserved is not FAILING — rather than the old proxy of
+  // is-healthy. Signal publishes no status feed, so its honest resting state is unreported;
+  // pinning this to is-healthy would re-encode the bug the unreported state exists to fix.
+  assert.notEqual(signalCard[1], "is-alert", "unobserved is not failing");
+  assert.equal(signalCard[1], "is-unreported", "and with no feed it cannot claim health either");
 });
 
 // ---------------------------------------------------------------- white-label defaults
@@ -196,6 +212,37 @@ await test("docs panel only flags .env.example where a .env exists", () => {
   assert.ok(!section.includes(".env.example"), "no .env anywhere, so no .env.example gap");
 });
 
+await test("GTM panel renders the portfolio call and every lean-strategy field", () => {
+  const floor = page("index.html");
+  const section = floor.match(/id="gtm"[\s\S]*?<\/details>/)[0];
+  assert.match(section, /Portfolio call:/);
+  assert.match(section, /Signal Briefing/);
+  assert.match(section, /Forge Production Kit/);
+  assert.match(section, /<th>Audience<\/th>/);
+  assert.match(section, /<th>Hook &amp; route<\/th>/);
+  assert.match(section, /<th>Advance when<\/th>/);
+  assert.match(section, /Evidence gap:/);
+  assert.match(floor, /<b>2<\/b><span>GTM strategies<\/span>/);
+});
+
+await test("GTM validation rejects ungrounded or ambiguous records", async () => {
+  const { validatePortfolioGtm } = await import("../src/panels/gtm.mjs");
+  const valid = JSON.parse(readFileSync(join(ACME, "portfolio-gtm.json"), "utf8"));
+  assert.equal(validatePortfolioGtm(valid), valid);
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [{ ...valid.products[0], evidence: [] }] }),
+    /evidence must contain at least one/,
+  );
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [valid.products[0], valid.products[0]] }),
+    /duplicate product id/,
+  );
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [{ ...valid.products[0], inventedScore: 92 }] }),
+    /unknown field/,
+  );
+});
+
 await test("an unconfigured panel renders nothing at all", () => {
   const floor = page("index.html");
   assert.ok(!floor.includes(`id="env"`), "env panel is not configured for the example");
@@ -216,6 +263,24 @@ await test("a panel whose optional tool is missing is skipped, not fatal", async
     assert.ok(warnings.some((w) => /env/.test(w)), "a skipped panel must say so");
   }
   rmSync(join(ACME, ".test-out"), { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------- bundled skills
+await test("portfolio GTM skill installs explicitly and never overwrites a local copy", () => {
+  const fixtures = join(ROOT, "test", "tmp", "bundled-skills");
+  rmSync(fixtures, { recursive: true, force: true });
+  mkdirSync(fixtures, { recursive: true });
+
+  const installed = installBundledSkill("portfolio-gtm", { targetRoot: fixtures });
+  const installedAgain = installBundledSkill("portfolio-gtm", { targetRoot: fixtures });
+  const skillRoot = join(fixtures, ".claude", "skills", "company-os-portfolio-gtm");
+  assert.equal(installed.action, "created");
+  assert.equal(installedAgain.action, "kept");
+  assert.ok(existsSync(join(skillRoot, "SKILL.md")));
+  assert.ok(existsSync(join(skillRoot, "agents", "openai.yaml")));
+  assert.match(readFileSync(join(skillRoot, "SKILL.md"), "utf8"), /does not authorize publishing/);
+
+  rmSync(fixtures, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------- shape panel
@@ -289,6 +354,207 @@ console.log("\n--- shape panel ---");
 
   rmSync(fixtures, { recursive: true, force: true });
 }
+
+// ---------------------------------------------------------------- parent-owned intranet
+console.log("\n--- intranet ---");
+{
+  const fixtures = join(ROOT, "test", "tmp", "intranet");
+  rmSync(fixtures, { recursive: true, force: true });
+  const write = (rel, content) => {
+    const path = join(fixtures, rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, content);
+  };
+  write("project/index.html", "<!doctype html><title>Project home</title><a href=\"docs/index.html\">Docs</a>");
+  write("project/docs/index.html", "<!doctype html><title>Project docs</title><a href=\"missing.html\">Missing</a>");
+  write("project/node_modules/noise/index.html", "<title>Dependency</title>");
+  write("project/editions/2026-01-01/index.html", "<title>Generated edition</title>");
+  write("project/content/input.md", "# changed");
+  write("project/scripts/build-index.mjs", `import { writeFileSync } from "node:fs";
+writeFileSync("index.html", "<!doctype html><title>Project home</title><a href=\\\"docs/index.html\\\">Docs</a>");`);
+
+  const intranetConfig = {
+    root: fixtures,
+    schemaPrefix: "test",
+    generatedMark: "<!-- generated by company-os",
+    rebuildCommand: "company-os build",
+    intranet: {
+      registry: join(fixtures, "intranet.json"),
+      state: join(fixtures, "intranet-state.json"),
+      maxDepth: 4,
+      requireAgentRule: true,
+      requireAgentSkill: true,
+      agentCommand: "company-os intranet maintain --changed <path>",
+    },
+  };
+  const intranetManifest = {
+    engines: [{ id: "project", dir: "project", name: "Project" }],
+  };
+
+  const discovered = discoverIntranet(intranetConfig, intranetManifest);
+  await test("intranet discovery finds owned child indexes but skips dependency and edition output", () => {
+    assert.deepEqual(discovered.pages.map((item) => item.projectPath), ["docs/index.html", "index.html"]);
+    assert.ok(discovered.pages.every((item) => item.registration === "candidate"));
+  });
+
+  const configuredPages = discovered.pages.map((item) => ({
+    ...item,
+    registration: "accepted",
+    sources: ["content/**"],
+    generator: item.projectPath === "index.html" ? "node scripts/build-index.mjs" : "npm run publish",
+    authority: { regenerate: true, publish: true, delete: true },
+  }));
+  writeIntranetRegistry(intranetConfig, { ...discovered, pages: configuredPages });
+
+  const maintained = await maintainIntranet(intranetConfig, intranetManifest, {
+    mode: "interaction",
+    changedPaths: ["project/content/input.md"],
+    execute: true,
+  });
+  await test("a changed registered source runs its accepted safe page generator", () => {
+    assert.ok(maintained.actions.some((item) => item.pageId === "project-home" && item.action === "regenerated"));
+  });
+  await test("intranet maintenance blocks commands that cross the publication boundary", () => {
+    assert.ok(maintained.actions.some((item) => item.action === "blocked" && /authority boundary/.test(item.reason)));
+    assert.equal(maintained.summary.blocked, 1);
+  });
+  await test("registry discovery forcibly keeps publish and delete authority false", () => {
+    const rescanned = discoverIntranet(intranetConfig, intranetManifest);
+    assert.ok(rescanned.pages.every((item) => item.authority.publish === false && item.authority.delete === false));
+  });
+
+  const checked = await maintainIntranet(intranetConfig, intranetManifest, {
+    mode: "check",
+    execute: false,
+  });
+  await test("intranet health catches broken local links", () => {
+    const docs = checked.pages.find((item) => item.projectPath === "docs/index.html");
+    assert.equal(docs.status, "broken");
+    assert.equal(docs.links.broken[0].href, "missing.html");
+  });
+
+  const installed = installIntranetAgentRules(intranetConfig, intranetManifest);
+  const installedAgain = installIntranetAgentRules(intranetConfig, intranetManifest);
+  await test("agent maintenance installation appends a bounded rule and installs the skill idempotently", () => {
+    assert.equal(installed[0].ruleAction, "created");
+    assert.equal(installed[0].skillAction, "created");
+    assert.equal(installedAgain[0].ruleAction, "kept");
+    assert.equal(installedAgain[0].skillAction, "kept");
+    assert.match(readFileSync(join(fixtures, "project", "AGENTS.md"), "utf8"), /company-os:intranet/);
+    assert.ok(existsSync(join(fixtures, "project", ".claude", "skills", "company-os-intranet-maintainer", "SKILL.md")));
+  });
+
+  rmSync(fixtures, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------- project status honesty
+//
+// The station light must never assert health it has no source for. Before this, an engine that
+// published nothing still rendered "all systems nominal" purely because it owned a scheduled task
+// that had not failed — but a job can exit 0 by design while holding a backlog of operator
+// decisions, so a green light there was the dashboard inventing an assurance.
+const STATUS_ENGINE = join(ACME, "packages", "signal", "intranet", "project-status.json");
+const statusOut = join(ACME, ".status-out");
+const buildStatus = async () => {
+  await build({ ...config, outDir: statusOut }, { argv: [], log: () => {}, warn: () => {} });
+  return readFileSync(join(statusOut, "index.html"), "utf8");
+};
+const writeStatus = (over) => {
+  mkdirSync(dirname(STATUS_ENGINE), { recursive: true });
+  writeFileSync(STATUS_ENGINE, JSON.stringify({
+    schemaVersion: `${config.schemaPrefix}.project-status/v1`,
+    projectId: "signal",
+    name: "Signal",
+    statusPage: "index.html",
+    updatedAt: new Date().toISOString(),
+    health: "nominal",
+    headline: "Nothing owed.",
+    metrics: {},
+    activity: [],
+    todos: [],
+    security: { state: "current", lastScanAt: null, scope: "repo", summary: "clean" },
+    ...over,
+  }, null, 2));
+};
+
+await test("an engine with no status feed reads as unreported, never nominal", async () => {
+  rmSync(dirname(STATUS_ENGINE), { recursive: true, force: true });
+  const floor = await buildStatus();
+  assert.match(floor, /no status feed/, "absence of evidence must be stated");
+  assert.ok(!floor.includes("all systems nominal"), "a task exit code is not a health report");
+});
+
+await test("a fresh nominal feed still lights the station green", async () => {
+  writeStatus({});
+  const floor = await buildStatus();
+  assert.match(floor, /project nominal/, "a real, current feed is what green is for");
+});
+
+await test("a feed past its freshness budget reports staleness instead of its own health", async () => {
+  const old = new Date(Date.now() - 60 * 86400000).toISOString();
+  writeStatus({ updatedAt: old, health: "nominal" });
+  const floor = await buildStatus();
+  assert.match(floor, /status \d+d stale/, "an unrefreshed feed must say how old it is");
+  assert.ok(!floor.includes("project nominal"), "a 60-day-old 'nominal' is not evidence of one");
+});
+
+await test("a corrupt feed degrades to unreported rather than to green", async () => {
+  mkdirSync(dirname(STATUS_ENGINE), { recursive: true });
+  writeFileSync(STATUS_ENGINE, "{ not json");
+  const floor = await buildStatus();
+  assert.match(floor, /no status feed/, "an unreadable feed is the same as no feed");
+  assert.ok(!floor.includes("all systems nominal"));
+  rmSync(dirname(STATUS_ENGINE), { recursive: true, force: true });
+  rmSync(statusOut, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------- derived baseline status
+await test("a derived feed reports only verifiable facts and never claims health", () => {
+  // Derive against this repository: it is a real git checkout, so every field has a real source.
+  const derived = deriveStatus(ROOT, { id: "company-os", name: "Company OS", schemaPrefix: "test" });
+  assert.ok(derived, "company-os is a git repo, so a baseline is derivable");
+  assert.equal(derived.health, "on-demand", "commit activity is not health and must not be sold as it");
+  assert.match(derived.headline, /Auto-derived baseline/, "a baseline must announce itself as one");
+  assert.deepEqual(derived.todos, [], "a derived feed cannot know what is owed");
+  assert.equal(derived.security.state, "unknown", "no scan wired means unknown, not clean");
+  assert.equal(typeof derived.metrics.commitsLast30d, "number");
+  for (const item of derived.activity) {
+    assert.ok(Number.isFinite(Date.parse(item.at)), "every activity entry carries a real timestamp");
+    assert.ok(item.detail && item.detail.length, "and a real subject");
+  }
+});
+
+await test("a directory with no git history yields no feed at all", () => {
+  const empty = join(ROOT, "test", "tmp", "not-a-repo");
+  mkdirSync(empty, { recursive: true });
+  assert.equal(deriveStatus(empty, { id: "x", name: "X" }), null, "inventing a feed is worse than none");
+  rmSync(join(ROOT, "test", "tmp", "not-a-repo"), { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------- bundled skills are single-sourced
+await test("every bundled skill is listable, and the intranet one is not a second copy", () => {
+  const ids = BUNDLED_SKILLS.map((s) => s.id);
+  assert.ok(ids.includes("intranet-maintainer"),
+    "install-agent-rules installs this skill and intranet.mjs marks pages needs-review without it, so it must be reachable through `skills install` like any other");
+  // The text install-agent-rules writes MUST be the bundled file, not a literal beside it. These
+  // had already drifted once — seven numbered steps against six — and a skill file is a
+  // behavioural contract, so two versions means two different sets of rules in play.
+  assert.equal(INTRANET_SKILL, readBundledSkill("intranet-maintainer"),
+    "INTRANET_SKILL must read the bundled file rather than restate it");
+  for (const skill of BUNDLED_SKILLS) {
+    assert.ok(existsSync(join(ROOT, "skills", skill.name, "SKILL.md")), `${skill.id} has no SKILL.md on disk`);
+    assert.doesNotThrow(() => readBundledSkill(skill.id), `${skill.id} is listed but unreadable`);
+  }
+});
+
+await test("the organizing guide the README sends people to exists", () => {
+  // A dead link in a README is cheap; a dead link that the README describes as "the guide" to the
+  // hour-long part of setup is a promise the package does not keep.
+  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+  for (const [, link] of readme.matchAll(/\]\((docs\/[^)]+\.md)\)/g)) {
+    assert.ok(existsSync(join(ROOT, link)), `README links to ${link}, which does not exist`);
+  }
+});
 
 // ---------------------------------------------------------------- summary
 console.log(`\n${failures.length ? `FAIL — ${failures.length} of ${passed + failures.length}` : `PASS — ${passed} tests`}`);

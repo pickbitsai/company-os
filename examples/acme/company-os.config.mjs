@@ -44,5 +44,6 @@ export default {
   // example should never quietly scan the machine of whoever cloned it.
   panels: {
     docs: {},
+    gtm: { file: "./portfolio-gtm.json" },
   },
 };

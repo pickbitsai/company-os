@@ -49,6 +49,31 @@ try {
     ["install", "--offline", "--omit=peer", "--ignore-scripts", "--no-audit", "--no-fund", tarball],
     consumer,
   );
+  const skills = runNpm(["exec", "--", "company-os", "skills", "list"], consumer);
+  assert.match(skills, /portfolio-gtm/);
+  const firstInstall = runNpm(
+    ["exec", "--", "company-os", "skills", "install", "portfolio-gtm"],
+    consumer,
+  );
+  const secondInstall = runNpm(
+    ["exec", "--", "company-os", "skills", "install", "portfolio-gtm"],
+    consumer,
+  );
+  const installedSkill = join(
+    consumer,
+    ".claude",
+    "skills",
+    "company-os-portfolio-gtm",
+  );
+  assert.match(firstInstall, /created/);
+  assert.match(secondInstall, /kept/);
+  assert.ok(existsSync(join(installedSkill, "SKILL.md")), "packed GTM skill was not installed");
+  assert.ok(existsSync(join(installedSkill, "agents", "openai.yaml")), "skill UI metadata was not packed");
+  assert.ok(
+    existsSync(join(consumer, "node_modules", "@pickbitsai", "company-os", "schemas", "portfolio-gtm.schema.json")),
+    "portfolio GTM schema was not packed",
+  );
+
   runNpm(["exec", "--", "company-os", "init"], consumer);
   assert.ok(existsSync(join(consumer, "company-os.config.mjs")), "CLI init did not write its config");
   assert.deepEqual(
@@ -61,7 +86,7 @@ try {
   assert.match(output, /My Company OS/);
   assert.match(output, /<b>0<\/b><span>workstations<\/span>/);
 
-  console.log("consumer smoke passed: packed, installed, initialized, and built from a clean project");
+  console.log("consumer smoke passed: packed, installed skill, initialized, and built from a clean project");
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
 }

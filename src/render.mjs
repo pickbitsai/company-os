@@ -5,7 +5,7 @@
 // deliberate: it makes the extraction reviewable by diffing output, not by reading two designs.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { CSS, companyCss } from "./styles.mjs";
 import {
   engineScripts, ownsOwnIndex, projectPath, scanScripts, scriptGroups, scriptsNote,
@@ -146,6 +146,19 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
 </div><div class="desk"><div class="monitor"><b>${badge}</b><span class="monitor-line"></span></div></div></div>`;
   }
 
+  // How many days past its freshness budget a status feed is, or null if it is still current.
+  // Measured against ctx.nowIso rather than the wall clock so a build is reproducible.
+  // An unparseable or absent updatedAt counts as stale: a feed that cannot say when it was
+  // written cannot be trusted to be recent.
+  function staleDays(status) {
+    const budget = config.projectStatusMaxAgeDays;
+    if (!budget) return null;
+    const at = Date.parse(status?.updatedAt ?? "");
+    if (!Number.isFinite(at)) return budget;
+    const days = Math.floor((Date.parse(nowIso) - at) / 86400000);
+    return days > budget ? days : null;
+  }
+
   // A task whose outcome is unobservable (ok == null) must not read as a failure here either.
   function stationState(engTasks, projectStatus = null) {
     const bad = engTasks.filter((t) => !t.missing && t.ok === false && !t.disabled);
@@ -154,8 +167,18 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
     if (projectStatus?.health === "blocked") return { cls: "is-alert", label: "project blocked" };
     if (projectStatus?.health === "attention") return { cls: "is-alert", label: "project attention" };
     if (running) return { cls: "is-running", label: "active now" };
+    // A feed nobody has refreshed is not evidence of health. Say so rather than letting a
+    // months-old "nominal" keep the light green — that is how May's numbers get read as today's.
+    if (projectStatus && staleDays(projectStatus) !== null) {
+      return { cls: "is-unreported", label: `status ${staleDays(projectStatus)}d stale` };
+    }
     if (projectStatus?.health === "nominal") return { cls: "is-healthy", label: "project nominal" };
-    if (engTasks.length) return { cls: "is-healthy", label: "all systems nominal" };
+    if (projectStatus?.health === "on-demand") return { cls: "is-manual", label: "on demand" };
+    // No contract. Scheduled tasks only prove the JOB ran; they say nothing about whether work
+    // is owed — a job can deliberately exit 0 while holding a backlog of operator decisions.
+    // Reporting that as "all systems nominal" is the dashboard inventing an assurance it has
+    // no source for, so an engine that publishes nothing reads as unreported instead.
+    if (engTasks.length) return { cls: "is-unreported", label: "no status feed" };
     return { cls: "is-manual", label: "on demand" };
   }
 
@@ -179,6 +202,23 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
     }
   }
   const PROJECT_STATUS = new Map(manifest.engines.map((eng) => [eng.id, loadProjectStatus(eng)]));
+
+  // Child pages remain repository-owned. Company OS supplies parent navigation and health from
+  // the maintenance receipt produced before rendering.
+  const INTRANET_PAGES = ctx.intranetState?.pages || [];
+  function intranetSection(eng) {
+    const pages = INTRANET_PAGES.filter((item) =>
+      item.projectId === eng.id && item.projectPath !== "index.html");
+    if (!pages.length) return "";
+    const rows = pages.map((item) => {
+      const href = relative(join(root, eng.dir), join(root, item.path)).split(sep).join("/");
+      const cls = item.status === "healthy"
+        ? "ok"
+        : item.status === "broken" || item.status === "blocked" ? "bad" : "warn";
+      return `<li><a href="${encodeURI(href)}">${esc(item.title)}</a> <span class="chip ${cls}">${esc(item.status)}</span><br><span class="mono">${esc(item.projectPath)}</span></li>`;
+    }).join("");
+    return `<h2>Intranet pages</h2><p class="doc">Repository-owned child pages discovered and checked by Company OS.</p><ul>${rows}</ul>`;
+  }
 
   // ---------- reports (generated report index) ----------
   function loadReports() {
@@ -234,6 +274,7 @@ ${showKicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}${body}
 <p class="doc">${esc(eng.role)}</p>
 ${eng.dashboardNote ? `<p class="doc"><b>Live controls:</b> ${esc(eng.dashboardNote)}</p>` : ""}
 <p class="doc mono"><a href="../index.html">← all engines</a></p>
+${intranetSection(eng)}
 <h2>Pipeline</h2><div class="flow" style="--acc:${eng.accent}">${flow || '<p class="doc">Session-driven — no fixed pipeline.</p>'}</div>
 <h2>Ingress → Egress</h2>
 <table><tr><th>Consumes</th><th>Produces</th></tr><tr>
@@ -259,6 +300,7 @@ ${report ? `<h2>Security</h2><p class="doc">Last ${esc(reportsLabel)} of <span c
 <h1>${esc(eng.name)} — commands</h1>
 <p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}</p>
 <p class="doc mono"><a href="../index.html">← company floor</a> · <a href="index.html">${esc(eng.dir)} dashboard</a></p>
+${intranetSection(eng)}
 ${commandsSection(eng)}`;
     return page(`${eng.name} commands — ${brand.opsLabel}`, brand.commandsKicker, body);
   }

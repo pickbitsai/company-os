@@ -11,6 +11,7 @@ import { engineScripts, ownsOwnIndex } from "./scripts.mjs";
 import { writeSnapshots } from "./publish.mjs";
 import { runPanels } from "./panels/index.mjs";
 import { loadTasksSafely } from "./scheduler.mjs";
+import { maintainIntranet } from "./intranet.mjs";
 
 function loadGovernance(config) {
   if (!config.governance) return null;
@@ -57,11 +58,25 @@ export async function build(config, { argv = [], log = console.log, warn = conso
   const nowIso = now.toISOString();
   const stamp = now.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
+  // The normal scheduled Company OS rebuild doubles as the intranet maintenance sweep when
+  // configured. It always scans and validates. Generator execution remains a separate opt-in,
+  // and each page must also be accepted and explicitly grant regeneration authority.
+  const intranetState = !sitesOnly && config.intranet?.maintainOnBuild
+    ? await maintainIntranet(config, manifest, {
+      mode: "scheduled-sweep",
+      execute: config.intranet.executeOnBuild === true,
+      now,
+      log,
+    })
+    : null;
+
   // Panels run before rendering because several contribute a hero stat and a nav link. A panel
   // that cannot collect (optional tool absent, viewer not running) is warned about and dropped.
-  const panels = await runPanels({ config, manifest, governance, tasks, nowIso }, { warn });
+  const panels = await runPanels({ config, manifest, governance, tasks, nowIso, intranetState }, { warn });
 
-  const renderer = createRenderer({ config, manifest, governance, tasks, stamp, nowIso, schedulerId, observesScheduler, panels });
+  const renderer = createRenderer({
+    config, manifest, governance, tasks, stamp, nowIso, schedulerId, observesScheduler, panels, intranetState,
+  });
 
   function safeWrite(path, html) {
     if (existsSync(path)) {
