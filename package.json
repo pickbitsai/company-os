@@ -1,6 +1,6 @@
 {
   "name": "@pickbitsai/company-os",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Company OS — a local ops dashboard for people running many projects with AI agents. Point it at a manifest, get a live company floor. MIT, no telemetry.",
   "keywords": [
     "dashboard",
@@ -38,6 +38,7 @@
     "bin/",
     "src/",
     "schemas/",
+    "skills/",
     "examples/",
     "README.md",
     "LICENSE",
