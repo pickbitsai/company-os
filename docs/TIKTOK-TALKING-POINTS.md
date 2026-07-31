@@ -5,11 +5,13 @@ Read-aloud notes, not a script. Short sentences, contractions, breath-friendly.
 Three links to give them: the repo, `docs/REBUILD-PROMPT.md`, and the install.
 
 > **Check this before you record.** `@pickbitsai/company-os` is **not on npm yet** — `npm i` and
-> `npx` both 404 today. And the unscoped name `company-os` is already taken by an unrelated
-> project (`minattinho/company-os`, an "AI-powered virtual office SDK") that also ships a
-> `company-os` binary. So `npx company-os build` runs **someone else's package**. Until the
-> scoped name is published, say "clone the repo" and demo from a local path. See "Before you hit
-> record".
+> `npx` both 404 today. Until the scoped name is published, say "clone the repo" and demo from a
+> local path. See "Before you hit record".
+>
+> Note the two names: the project is **Company OS**, the command is **`pickbits-os`**. The
+> unscoped name `company-os` belongs to an unrelated project on npm that ships a binary of that
+> name, which is exactly why ours is called something else. Say the command as `pickbits-os` —
+> people type what they hear.
 
 ---
 
@@ -99,7 +101,7 @@ Use your real ones on the day — check the dashboard before recording. Roughly,
 ## Not shipped yet — don't claim this on camera
 
 Written up now so it's ready, but **this lives in the private ops repo, not in the package.**
-Nothing below is a Company OS feature until `company-os check` exists. If you say it before then,
+Nothing below is a Company OS feature until `pickbits-os check` exists. If you say it before then,
 someone installs it and it isn't there.
 
 The story, when it does ship — it's the strongest honesty-angle material we have, because the
@@ -130,7 +132,7 @@ learn to scroll past.
 strings. The corrected count is 8. If you want a laugh on camera: the number I nearly used to
 illustrate false positives was itself a false positive.)
 
-**Ship gate:** move the checker into the package as `company-os check`, then this section merges
+**Ship gate:** move the checker into the package as `pickbits-os check`, then this section merges
 up into "Demo beats" and "The honesty angle."
 
 ## Don't say
@@ -139,7 +141,8 @@ up into "Demo beats" and "The honesty angle."
 - **"AI-powered."** Nothing in the generator calls a model. It reads files. That's the point, and claiming otherwise invites the obvious question.
 - **"Replaces"** anything. It doesn't replace gitleaks or TruffleHog — say it complements them if secret scanning comes up.
 - Any real key name, path, or repo name that isn't already public. Blur or use the Acme example if you're showing the env panel.
-- **"Just npm install it"** — not until the scoped package is actually published. Right now that's a 404, and the unscoped name belongs to someone else's project. Say "clone it" until that changes.
+- **"Just npm install it"** — not until the scoped package is actually published. Right now that's a 404. Say "clone it" until that changes.
+- **"company-os"** as the command. It's `pickbits-os`. The unscoped name is someone else's package, and viewers type what they hear.
 
 ## Before you hit record
 
@@ -148,8 +151,8 @@ up into "Demo beats" and "The honesty angle."
 - The Acme example is the safe thing to demo — fictional company, no real data, and it's what a viewer sees on their first run anyway. Run it from a clone, **not** via `npx`:
 
   ```bash
-  node bin/company-os.mjs build --config examples/acme
+  node bin/pickbits-os.mjs build --config examples/acme
   ```
 
-  `npx company-os build` fetches an unrelated package of the same name off npm. Don't put that
-  command on screen, and don't say it out loud — people will type what they hear.
+  Don't put `npx` on screen at all until the scoped package is published — it 404s today. And if
+  the command is on screen, make sure it reads `pickbits-os`, never `company-os`.

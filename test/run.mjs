@@ -130,9 +130,23 @@ await test("ships no proprietary art: gradients, CSS figures, no image backdrops
 await test("carries no PickBits identifiers", () => {
   for (const file of ["index.html", "packages/signal/index.html"]) {
     const html = page(file);
-    assert.ok(!/pickbits/i.test(html), `${file} mentions PickBits`);
+    // The rebuild command names the CLI, and the CLI is called `pickbits-os` — a generated page
+    // has to say how to regenerate itself. That one string is removed before matching, so the
+    // white-label contract still holds for everything else: a bare "PickBits", a sibling like
+    // "pickbits-daily", or the private company's name in an Acme build all still fail here.
+    const branding = html.replace(/pickbits-os(?![\w-])/gi, "");
+    assert.ok(!/pickbits/i.test(branding), `${file} mentions PickBits`);
     assert.ok(!/[A-Z]:\\new\\/.test(html), `${file} leaks a private path`);
   }
+});
+
+await test("the generated rebuild hint names the real binary, not the squatted one", () => {
+  // Regression guard for the npm collision: an unrelated `company-os` package ships a binary of
+  // that name, so a page telling a reader to run `npx company-os` would send them to someone
+  // else's code. The footer must name ours.
+  const floor = page("index.html");
+  assert.match(floor, /npx pickbits-os build/, "footer quotes the pickbits-os command");
+  assert.ok(!/npx company-os\b/.test(floor), "footer must never quote the unscoped company-os bin");
 });
 
 // ---------------------------------------------------------------- publish projection

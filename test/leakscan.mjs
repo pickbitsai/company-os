@@ -24,11 +24,18 @@ const ALLOWED_FILES = new Set(["LICENSE", "README.md"]);
 // An `@pickbitsai/<name>` npm specifier is a PUBLIC package identifier by construction — a scope
 // is how strangers install the thing. Allowing the whole scope (rather than listing siblings one
 // at a time) is why the optional `@pickbitsai/enview` peer dependency can be named in source.
-// It is still narrow: a bare "PickBits" or "pickbits-daily" outside a package specifier trips.
+// `pickbits-os` is public by the same argument: it is this package's bin name, the literal string
+// a stranger types to run it, so it has to appear in the CLI, the docs, and the generated pages.
+// It is deliberately unscoped-but-prefixed — the unscoped name `company-os` belongs to an
+// unrelated npm package that ships a binary of that name, so a bare `npx company-os` would run
+// theirs. The org prefix is what makes ours unmistakable.
+// It is still narrow: a bare "PickBits" or "pickbits-daily" outside a package specifier trips,
+// and the negative lookahead keeps `pickbits-os` from shadowing a longer private identifier.
 const OWN_IDENTITY = [
   /@pickbitsai\/[\w.-]+/g,
   /(?:github\.com|npmjs\.com\/package)\/(?:@)?pickbitsai(?:\/[\w.-]+)?/g,
   /PickBits\.AI(?= |$|\.)/g,
+  /pickbits-os(?![\w-])/gi,
 ];
 const stripOwnIdentity = (line) => OWN_IDENTITY.reduce((acc, re) => acc.replace(re, ""), line);
 const SKIP_DIRS = new Set(["node_modules", ".git"]);

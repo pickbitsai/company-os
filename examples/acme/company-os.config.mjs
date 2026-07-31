@@ -1,5 +1,5 @@
 // Example config for the fictional Acme company. Build it with:
-//   npx company-os build --config examples/acme
+//   npx pickbits-os build --config examples/acme
 //
 // This is also the fixture the test suite renders, so it deliberately leaves the art and
 // scheduler options off — proving the defaults (CSS-figure avatars, gradient backdrops, no
@@ -27,10 +27,10 @@ export default {
     pathPrefix: "acme/",
     manifestLabel: "examples/acme/engines.json",
     footData: "examples/acme/engines.json",
-    rebuildHint: "npx company-os build --config examples/acme",
+    rebuildHint: "npx pickbits-os build --config examples/acme",
   },
 
-  rebuildCommand: "npx company-os build --config examples/acme",
+  rebuildCommand: "npx pickbits-os build --config examples/acme",
 
   // "none" keeps the example deterministic and platform-independent: a build on any machine
   // produces the same page. Switch to "schtasks" or "cron" (or omit for the platform default)

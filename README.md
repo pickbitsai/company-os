@@ -6,21 +6,20 @@ Runs on your machine. Reads your files. Writes static HTML. No telemetry, no acc
 
 ```bash
 npm i -D github:pickbitsai/company-os
-npx company-os init          # writes a starter config + empty manifest
-npx company-os build         # writes index.html + one page per project
+npx pickbits-os init          # writes a starter config + empty manifest
+npx pickbits-os build         # writes index.html + one page per project
 ```
 
 GitHub is the immediate distribution channel for this release. The equivalent
 registry package will be `@pickbitsai/company-os` after npm publication.
 
-> **Always install first, or name the repo explicitly.** An unrelated package
-> called `company-os` exists on npm and ships a binary of the same name, so a
-> bare `npx company-os` on a machine that hasn't installed this one will fetch
-> and run *that* instead. The `npx` lines above are safe because they follow the
-> install on line 1 and resolve to your local `node_modules/.bin`.
+The project is Company OS; the command is `pickbits-os`. The names differ on
+purpose — an unrelated package called `company-os` already sits on npm and
+ships a binary of that name, so a bare `npx company-os` would have fetched and
+run *someone else's* package. Nothing publishes `pickbits-os`, so the same
+mistake now fails loudly instead of executing a stranger's code.
 
-Try it before configuring anything — this form needs no install and cannot
-resolve to the wrong package:
+Try it before configuring anything:
 
 ```bash
 npx github:pickbitsai/company-os build --config examples/acme
@@ -173,7 +172,7 @@ If a public site should show what your company does without exposing how it runs
 publish: [{ dir: "../website/data", globalName: "COMPANY_OS" }],
 ```
 
-Then `npx company-os build --sites-only` refreshes just those.
+Then `npx pickbits-os build --sites-only` refreshes just those.
 
 ## What's private, and how that's enforced
 

@@ -32,7 +32,7 @@
     "./adapters/*": "./src/adapters/*.mjs"
   },
   "bin": {
-    "company-os": "./bin/company-os.mjs"
+    "pickbits-os": "./bin/pickbits-os.mjs"
   },
   "files": [
     "bin/",
@@ -47,8 +47,8 @@
     "docs/"
   ],
   "scripts": {
-    "build": "node bin/company-os.mjs build",
-    "demo": "node bin/company-os.mjs build --config examples/acme",
+    "build": "node bin/pickbits-os.mjs build",
+    "demo": "node bin/pickbits-os.mjs build --config examples/acme",
     "test": "node test/run.mjs",
     "test:consumer": "node test/consumer-install.mjs",
     "leakscan": "node test/leakscan.mjs",

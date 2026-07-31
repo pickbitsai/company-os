@@ -54,14 +54,14 @@ try {
     ["install", "--offline", "--omit=peer", "--ignore-scripts", "--no-audit", "--no-fund", tarball],
     consumer,
   );
-  runNpm(["exec", "--", "company-os", "init"], consumer);
+  runNpm(["exec", "--", "pickbits-os", "init"], consumer);
   assert.ok(existsSync(join(consumer, "company-os.config.mjs")), "CLI init did not write its config");
   assert.deepEqual(
     JSON.parse(readFileSync(join(consumer, "engines.json"), "utf8")),
     { engines: [] },
     "CLI init did not write a buildable starter manifest",
   );
-  runNpm(["exec", "--", "company-os", "build"], consumer);
+  runNpm(["exec", "--", "pickbits-os", "build"], consumer);
   const output = readFileSync(join(consumer, "index.html"), "utf8");
   assert.match(output, /My Company OS/);
   assert.match(output, /<b>0<\/b><span>workstations<\/span>/);

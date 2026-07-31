@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// CLI.
-//   company-os build                        # find company-os.config.mjs upward from cwd
-//   company-os build --config path/to/dir   # or a direct path to a config file
-//   company-os build --sites-only           # refresh publish targets only, skip the HTML
-//   company-os init                         # write a starter config and empty manifest
+// CLI. The command is `pickbits-os`; the config file it looks for keeps the product name.
+//   pickbits-os build                        # find company-os.config.mjs upward from cwd
+//   pickbits-os build --config path/to/dir   # or a direct path to a config file
+//   pickbits-os build --sites-only           # refresh publish targets only, skip the HTML
+//   pickbits-os init                         # write a starter config and empty manifest
 
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -26,7 +26,7 @@ function resolveConfigPath() {
   if (!supplied) {
     const found = findConfig(cwd());
     if (!found) {
-      console.error("no company-os config found. Run `company-os init`, or pass --config <path>.");
+      console.error("no Company OS config found. Run `pickbits-os init`, or pass --config <path>.");
       exit(1);
     }
     return found;
@@ -77,7 +77,7 @@ if (command === "init") {
   const manifestStatus = existsSync(manifestTarget)
     ? `kept existing ${manifestTarget}`
     : (writeFileSync(manifestTarget, STARTER_MANIFEST), `wrote ${manifestTarget}`);
-  console.log(`wrote ${target}\n${manifestStatus}\nNext: run \`company-os build\`.`);
+  console.log(`wrote ${target}\n${manifestStatus}\nNext: run \`pickbits-os build\`.`);
   exit(0);
 }
 
@@ -89,9 +89,9 @@ if (command !== "build") {
 const configPath = resolveConfigPath();
 try {
   const config = await loadConfig(configPath);
-  console.log(`company-os · config ${basename(configPath)} · manifest ${config.manifest}`);
+  console.log(`pickbits-os · config ${basename(configPath)} · manifest ${config.manifest}`);
   await build(config, { argv: args });
 } catch (error) {
-  console.error(`company-os build failed: ${error.message}`);
+  console.error(`pickbits-os build failed: ${error.message}`);
   exit(1);
 }
