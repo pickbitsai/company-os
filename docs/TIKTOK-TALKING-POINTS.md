@@ -4,14 +4,12 @@ Read-aloud notes, not a script. Short sentences, contractions, breath-friendly.
 
 Three links to give them: the repo, `docs/REBUILD-PROMPT.md`, and the install.
 
-> **Check this before you record.** `@pickbitsai/company-os` is **not on npm yet** — `npm i` and
-> `npx` both 404 today. Until the scoped name is published, say "clone the repo" and demo from a
-> local path. See "Before you hit record".
+> **Check this before you record.** `@pickbitsai/company-os` is live on npm, so
+> `npm i -D @pickbitsai/company-os` works on camera — say it, show it.
 >
-> Note the two names: the project is **Company OS**, the command is **`pickbits-os`**. The
-> unscoped name `company-os` belongs to an unrelated project on npm that ships a binary of that
-> name, which is exactly why ours is called something else. Say the command as `pickbits-os` —
-> people type what they hear.
+> One thing to get right: the package is `@pickbitsai/company-os`, the command it installs is
+> **`pickbits-os`**. The unscoped `company-os` is an unrelated project, which is why ours carries
+> the prefix. Say and show `pickbits-os` — viewers type what they hear.
 
 ---
 
@@ -141,18 +139,16 @@ up into "Demo beats" and "The honesty angle."
 - **"AI-powered."** Nothing in the generator calls a model. It reads files. That's the point, and claiming otherwise invites the obvious question.
 - **"Replaces"** anything. It doesn't replace gitleaks or TruffleHog — say it complements them if secret scanning comes up.
 - Any real key name, path, or repo name that isn't already public. Blur or use the Acme example if you're showing the env panel.
-- **"Just npm install it"** — not until the scoped package is actually published. Right now that's a 404. Say "clone it" until that changes.
 - **"company-os"** as the command. It's `pickbits-os`. The unscoped name is someone else's package, and viewers type what they hear.
 
 ## Before you hit record
 
 - Run your local Company OS build so the numbers are current.
 - Decide whether the env panel is on screen at all. If it is, check the frame for project names you'd rather not publish.
-- The Acme example is the safe thing to demo — fictional company, no real data, and it's what a viewer sees on their first run anyway. Run it from a clone, **not** via `npx`:
+- The Acme example is the safe thing to demo — fictional company, no real data, and it's what a viewer sees on their first run anyway. From a clone:
 
   ```bash
   node bin/pickbits-os.mjs build --config examples/acme
   ```
 
-  Don't put `npx` on screen at all until the scoped package is published — it 404s today. And if
-  the command is on screen, make sure it reads `pickbits-os`, never `company-os`.
+  If the command is on screen, check it reads `pickbits-os`, never `company-os`.

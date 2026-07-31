@@ -5,19 +5,14 @@
 Runs on your machine. Reads your files. Writes static HTML. No telemetry, no account, no uploads, no dependencies.
 
 ```bash
-npm i -D github:pickbitsai/company-os
+npm i -D @pickbitsai/company-os
 npx pickbits-os init          # writes a starter config + empty manifest
 npx pickbits-os build         # writes index.html + one page per project
 ```
 
-GitHub is the immediate distribution channel for this release. The equivalent
-registry package will be `@pickbitsai/company-os` after npm publication.
-
-The project is Company OS; the command is `pickbits-os`. The names differ on
-purpose — an unrelated package called `company-os` already sits on npm and
-ships a binary of that name, so a bare `npx company-os` would have fetched and
-run *someone else's* package. Nothing publishes `pickbits-os`, so the same
-mistake now fails loudly instead of executing a stranger's code.
+The package is `@pickbitsai/company-os` and the command is `pickbits-os` — the
+unscoped `company-os` on npm belongs to an unrelated project, so the command
+carries the org prefix.
 
 Try it before configuring anything:
 
