@@ -92,8 +92,23 @@ export function collect({ config, manifest, settings = {}, nowIso }) {
   const ungovernedRepos = measuresCoverage ? report.ungoverned : [];
   const neverPushed = proposals.filter((p) => /never pushed/i.test(p.reason || ""));
   const unauthorized = proposals.filter((p) => /authorize/i.test(p.note || ""));
+  // Live branches and consolidation postdate the 2026-07 producer — absence is null, not zero,
+  // same as coverage and debt.
+  const active = Array.isArray(report.active) ? report.active : null;
+  const consolidation = report.consolidation && typeof report.consolidation === "object" ? report.consolidation : null;
+  const duplicates = consolidation && Array.isArray(consolidation.duplicates) ? consolidation.duplicates : [];
 
   const findings = [];
+  // Duplicates lead: this is the finding that costs agent-days when invisible (2026-07-31 —
+  // two sessions captured the same warehouse work onto two branches; nine live branches were
+  // absent from this very panel while it happened).
+  if (duplicates.length) {
+    findings.push({
+      key: "duplicates",
+      message: "duplicate/superset branch clusters — the same work captured more than once; the consolidator's run is proposed on the service desk",
+      names: duplicates.map((d) => `${d.name} (${d.clusters} cluster${d.clusters === 1 ? "" : "s"})`),
+    });
+  }
   if (stuck.length) {
     findings.push({
       key: "protected",
@@ -140,6 +155,19 @@ export function collect({ config, manifest, settings = {}, nowIso }) {
     acceptedRepos: accepted ? [...new Set(accepted.map((a) => a.name))] : [],
     proposalCount: proposals.length,
     actionCount: Array.isArray(report.actions) ? report.actions.length : 0,
+    // Live desks: branches inside the sweep's quiet window, counted and attributed but NEVER
+    // proposed — invisible live branches are how two sessions capture the same work twice.
+    // Null when the report predates the bucket.
+    activeBranches: active ? active.map((a) => ({
+      name: a.name, branch: a.branch,
+      attributedTo: typeof a.attributedTo === "string" ? a.attributedTo : null,
+    })) : null,
+    consolidation: consolidation ? {
+      reaped: (consolidation.reaped || []).length,
+      executed: (consolidation.executed || []).map((e) => `${e.name}: ${e.how || "landed"}`),
+      deferred: (consolidation.deferred || []).length,
+      rejected: (consolidation.rejected || []).map((r) => r.name),
+    } : null,
   };
 }
 
@@ -196,6 +224,21 @@ export function render(data, { esc }) {
   }
   if (data.otherWithFindings) {
     footNotes.push(`${data.otherWithFindings} repo${data.otherWithFindings === 1 ? "" : "s"} outside the manifest also have loose work.`);
+  }
+  // Live desks are information, not alarm: they exist so a second agent can SEE a first agent's
+  // in-flight branch before re-doing the work. Attribution (from commit trailers / the session
+  // viewer) says whose desk it is.
+  if (data.activeBranches?.length) {
+    footNotes.push(`${data.activeBranches.length} live branch${data.activeBranches.length === 1 ? "" : "es"} inside the quiet window — someone's desk, not a proposal: <span class="mono">${data.activeBranches.map((a) => esc(`${a.name}/${a.branch}${a.attributedTo ? ` — ${a.attributedTo}` : ""}`)).join(" · ")}</span>.`);
+  }
+  if (data.consolidation) {
+    const c = data.consolidation;
+    const bits = [];
+    if (c.reaped) bits.push(`${c.reaped} proven-landed branch${c.reaped === 1 ? "" : "es"} reaped`);
+    if (c.executed.length) bits.push(`consolidations landed: ${c.executed.map(esc).join("; ")}`);
+    if (c.deferred) bits.push(`${c.deferred} deferred to a human`);
+    if (c.rejected.length) bits.push(`plans rejected for: ${c.rejected.map(esc).join(", ")}`);
+    if (bits.length) footNotes.push(`Consolidation — ${bits.join(" · ")}.`);
   }
   if (data.unreportedEngines.length) {
     footNotes.push(`Not in the report — clean, or not a git repo: <span class="mono">${data.unreportedEngines.map(esc).join(" · ")}</span>.`);
