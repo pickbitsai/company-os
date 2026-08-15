@@ -5,6 +5,7 @@
 // does, so a break shows up as a wrong page rather than a failed mock.
 
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,6 +194,34 @@ await test("cron adapter parses schedules and reports no false outcome", async (
   // Exercise the expression parser through a synthetic crontab rather than the real one.
   const mod = await import("../src/adapters/cron.mjs?probe=1");
   assert.equal(typeof mod.loadTasks, "function");
+});
+
+await test("schtasks distinguishes running, terminated, and never-run results", async () => {
+  const original = childProcess.execFileSync;
+  childProcess.execFileSync = () => [
+    '"HostName","TaskName","Next Run Time","Last Run Time","Last Result","Status","Scheduled Task State","Schedule Type","Start Time","Repeat: Every"',
+    '"HOST","\\running","N/A","8/15/2026 1:00:00 AM","267009","Running","Enabled","Daily","1:00:00 AM","Disabled"',
+    '"HOST","\\terminated","N/A","8/15/2026 2:00:00 AM","267014","Ready","Enabled","Daily","2:00:00 AM","Disabled"',
+    '"HOST","\\new-task","N/A","N/A","267011","Ready","Enabled","Daily","3:00:00 AM","Disabled"',
+  ].join("\n");
+  try {
+    const { loadTasks } = await import("../src/adapters/schtasks.mjs");
+    const tasks = loadTasks();
+    assert.deepEqual(
+      { state: tasks.get("running").state, ok: tasks.get("running").ok },
+      { state: "running", ok: null },
+    );
+    assert.deepEqual(
+      { state: tasks.get("terminated").state, ok: tasks.get("terminated").ok },
+      { state: "failed", ok: false },
+    );
+    assert.deepEqual(
+      { state: tasks.get("new-task").state, ok: tasks.get("new-task").ok },
+      { state: "never-ran", ok: null },
+    );
+  } finally {
+    childProcess.execFileSync = original;
+  }
 });
 
 // ---------------------------------------------------------------- panels
