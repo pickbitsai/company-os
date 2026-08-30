@@ -7,6 +7,12 @@
   "required": ["engines"],
   "properties": {
     "$comment": { "type": "string" },
+    "owners": {
+      "type": "object",
+      "description": "Owner vocabulary. Keys are short owner ids; engine and satellite rows may only use ids declared here.",
+      "propertyNames": { "pattern": "^[a-z0-9-]+$" },
+      "additionalProperties": { "$ref": "#/$defs/owner" }
+    },
     "engines": {
       "type": "array",
       "items": { "$ref": "#/$defs/engine" }
@@ -22,6 +28,7 @@
       "required": ["id", "dir", "name", "class", "accent", "role"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "Stable identifier. Also the avatar filename (<id>.webp) and the governance profile key." },
+        "owner": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "The accountable party; used to group this project in the areas-of-responsibility panel." },
         "dir": { "type": "string", "description": "Directory relative to config.root. Its package.json supplies the command surface." },
         "name": { "type": "string", "minLength": 1 },
         "class": { "type": "string", "description": "Short category shown under the title, e.g. 'Production studio'." },
@@ -83,6 +90,7 @@
       "required": ["name", "note"],
       "properties": {
         "id": { "type": "string" },
+        "owner": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "The accountable party; used to group this project in the areas-of-responsibility panel." },
         "dir": { "type": "string", "description": "Set this to surface the satellite's npm commands on the floor." },
         "name": { "type": "string" },
         "note": { "type": "string" },
@@ -91,6 +99,16 @@
         "start": { "type": "string" },
         "scriptNotes": { "type": "object", "additionalProperties": { "type": "string" } }
       }
+    },
+    "owner": {
+      "type": "object",
+      "required": ["name", "what"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "what": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$", "description": "One-line description of the area of responsibility." },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{3,8}$" }
+      },
+      "additionalProperties": false
     }
   }
 }

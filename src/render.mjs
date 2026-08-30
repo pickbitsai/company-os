@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { CSS, companyCss } from "./styles.mjs";
+import { CSS, companyCss, panelCss } from "./styles.mjs";
 import {
   engineScripts, ownsOwnIndex, projectPath, scanScripts, scriptGroups, scriptsNote,
 } from "./scripts.mjs";
@@ -38,6 +38,20 @@ function loadArray(root, spec) {
 export function createRenderer(ctx) {
   const { config, manifest, governance, tasks, stamp, nowIso } = ctx;
   const { root, brand, generatedMark } = config;
+
+  const countWords = [
+    "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+    "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty",
+  ];
+  const countLabel = (count) => count <= 20 ? countWords[count] : String(count);
+  const substituteCounts = (value) => String(value ?? "")
+    .replace(/\{engineCount\}/g, countLabel(manifest.engines.length))
+    .replace(/\{satelliteCount\}/g, countLabel(manifest.satellites?.length || 0));
+
+  function ownerChip(ownerId) {
+    const name = manifest.owners?.[ownerId]?.name;
+    return name ? `<span class="chip">owned by ${esc(name)}</span>` : "";
+  }
 
   // ---------- live schedule state ----------
   function taskRow(name) {
@@ -104,6 +118,21 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
   const commandsHref = (eng) =>
     `${encodeURI(eng.dir)}/${ownsOwnIndex(root, eng, generatedMark) ? "ops-commands.html" : "index.html"}`;
 
+  function enginePanels(dir) {
+    return (ctx.panels || []).filter(({ panel }) => panel.engine === dir);
+  }
+
+  function renderPanelHtml({ panel, data }, { onEnginePage, engineHref }) {
+    const fn = onEnginePage && typeof panel.renderEngine === "function"
+      ? panel.renderEngine : panel.render;
+    try {
+      return fn.call(panel, data, { esc, cmdRow, engineHref }) || "";
+    } catch (error) {
+      console.warn(`panel "${panel.id}" failed to render: ${error.message}`);
+      return "";
+    }
+  }
+
   // ---------- skills ----------
   function scanSkills(dir) {
     const found = [];
@@ -125,14 +154,19 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
   // Mascot art is optional and lives outside this package: point config.avatars at a directory
   // of <engineId>.webp. Without it the CSS figure renders instead — not a placeholder, a
   // complete look, which is what lets the public default ship with no illustration at all.
-  function avatarArt(id) {
+  // `hrefPrefix` exists because engine pages sit one directory below the master page, so the
+  // single page-relative avatarsHref only resolves from the master. Callers deeper in the tree
+  // pass their own "../"-style prefix rather than the generator guessing a depth.
+  function avatarArt(id, hrefPrefix = "") {
     if (!id || !config.avatars) return null;
-    return existsSync(join(config.avatars, `${id}.webp`)) ? `${config.avatarsHref}/${id}.webp` : null;
+    return existsSync(join(config.avatars, `${id}.webp`))
+      ? `${hrefPrefix}${config.avatarsHref}/${id}.webp`
+      : null;
   }
 
-  function avatarVisual(eng) {
+  function avatarVisual(eng, hrefPrefix = "") {
     const avatar = eng.avatar || {};
-    const art = avatarArt(eng.id);
+    const art = avatarArt(eng.id, hrefPrefix);
     const badge = esc(avatar.badge || eng.id);
     if (art) {
       return `<div class="workstation has-art">
@@ -259,6 +293,10 @@ ${showKicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}${body}
     const engTasks = (eng.nodes || []).flatMap((n) => n.tasks || []).map(taskRow);
     const report = REPORTS[0];
     const gov = governanceProfile(eng);
+    const panelSections = enginePanels(eng.dir)
+      .map((entry) => renderPanelHtml(entry, { onEnginePage: true, engineHref: null }))
+      .filter(Boolean)
+      .join("\n");
     const flow = (eng.nodes || [])
       .map((n) => {
         const chips = (n.tasks || []).map((t) => schedChip(taskRow(t))).join("");
@@ -268,13 +306,16 @@ ${showKicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}${body}
     const servers = (eng.servers || [])
       .map((s) => `<tr><td class="mono"><a href="http://127.0.0.1:${s.port}">:${s.port}</a></td><td>${esc(s.what)}</td><td class="mono">${esc(s.start)}</td></tr>`)
       .join("");
+    const mascot = avatarArt(eng.id, "../");
     const body = `
+${mascot ? `<div class="engine-mascot"><img src="${esc(mascot)}" alt="${esc(eng.name)} mascot" loading="lazy" decoding="async" width="96" height="96"></div>` : ""}
 <h1>${esc(eng.name)}</h1>
-<p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}</p>
+<p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}${eng.owner ? ` ${ownerChip(eng.owner)}` : ""}</p>
 <p class="doc">${esc(eng.role)}</p>
 ${eng.dashboardNote ? `<p class="doc"><b>Live controls:</b> ${esc(eng.dashboardNote)}</p>` : ""}
 <p class="doc mono"><a href="../index.html">← all engines</a></p>
 ${intranetSection(eng)}
+${panelSections}
 <h2>Pipeline</h2><div class="flow" style="--acc:${eng.accent}">${flow || '<p class="doc">Session-driven — no fixed pipeline.</p>'}</div>
 <h2>Ingress → Egress</h2>
 <table><tr><th>Consumes</th><th>Produces</th></tr><tr>
@@ -291,18 +332,27 @@ ${skills.length ? `<h2>Skills</h2><div class="chips">${skills.map((s) => `<span 
 ${(eng.logs || []).length ? `<h2>Logs & state</h2><ul>${eng.logs.map((l) => `<li class="mono">${esc(l)}</li>`).join("")}</ul>` : ""}
 ${(eng.docs || []).length ? `<h2>Docs</h2><ul>${eng.docs.map((d) => `<li class="mono">${esc(d)}</li>`).join("")}</ul>` : ""}
 ${report ? `<h2>Security</h2><p class="doc">Last ${esc(reportsLabel)} of <span class="mono">${esc(report.target)}</span>: <b>${esc(report.date)}</b> — <span class="mono">${esc(reportsDir)}/${esc(report.file)}</span></p>` : ""}`;
-    return page(`${eng.name} — ${brand.opsLabel}`, brand.engineKicker, body);
+    return page(`${eng.name} — ${brand.opsLabel}`, brand.engineKicker, body, {
+      extraCss: panelSections ? panelCss() : "",
+    });
   }
 
   // Standalone command sheet for engines whose index.html we must not touch.
   function commandsPage(eng) {
+    const panelSections = enginePanels(eng.dir)
+      .map((entry) => renderPanelHtml(entry, { onEnginePage: true, engineHref: null }))
+      .filter(Boolean)
+      .join("\n");
     const body = `
 <h1>${esc(eng.name)} — commands</h1>
 <p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}</p>
 <p class="doc mono"><a href="../index.html">← company floor</a> · <a href="index.html">${esc(eng.dir)} dashboard</a></p>
 ${intranetSection(eng)}
+${panelSections}
 ${commandsSection(eng)}`;
-    return page(`${eng.name} commands — ${brand.opsLabel}`, brand.commandsKicker, body);
+    return page(`${eng.name} commands — ${brand.opsLabel}`, brand.commandsKicker, body, {
+      extraCss: panelSections ? panelCss() : "",
+    });
   }
 
   // ---------- master page ----------
@@ -321,7 +371,7 @@ ${commandsSection(eng)}`;
         return `<article class="station ${state.cls}" style="--acc:${eng.accent}" aria-label="${esc(eng.name)} workstation: ${esc(state.label)}">
 <div class="station-head"><span class="station-number">DESK ${String(index + 1).padStart(2, "0")}</span><span class="health-pill">${esc(state.label)}</span></div>
 <div class="station-body"><div class="station-copy"><h3><a href="${encodeURI(eng.dir)}/index.html">${esc(eng.name)}</a></h3>
-<p class="station-label">${esc(eng.avatar?.station || eng.class)}</p><p class="station-role">${esc(eng.role)}</p><div class="chips">${govChip}${cmdChip}</div>${pulse}${controls ? `<div class="station-controls">${controls}</div>` : ""}</div>${avatarVisual(eng)}</div>
+<p class="station-label">${esc(eng.avatar?.station || eng.class)}${eng.owner ? ` ${ownerChip(eng.owner)}` : ""}</p><p class="station-role">${esc(eng.role)}</p><div class="chips">${govChip}${cmdChip}</div>${pulse}${controls ? `<div class="station-controls">${controls}</div>` : ""}</div>${avatarVisual(eng)}</div>
 <span class="station-path">${esc(brand.pathPrefix)}${esc(eng.dir)}</span></article>`;
       })
       .join("");
@@ -351,7 +401,7 @@ ${commandsSection(eng)}`;
       if (!rows) return "";
       const headers = (collection.headers || []).map((h) => `<th>${esc(typeof h === "string" ? h : h.label)}</th>`).join("");
       const count = typeof collection.countLabel === "function" ? collection.countLabel(data) : collection.countLabel || "";
-      return `<details class="ops-section" id="${esc(collection.id)}"${collection.open ? " open" : ""}><summary>${esc(collection.title)} <span class="section-count">${esc(count)}</span></summary><div class="table-shell"><table><tr>${headers}</tr>${rows}</table></div></details>`;
+      return `<details class="ops-section" id="${esc(collection.id)}"${collection.open ? " open" : ""}><summary>${esc(collection.title)} <span class="section-count">${esc(count)}</span>${collection.owner ? ` ${ownerChip(collection.owner)}` : ""}</summary><div class="table-shell"><table><tr>${headers}</tr>${rows}</table></div></details>`;
     }).join("\n    ");
 
     // Satellites have no page of their own, so their command surface is listed here inline.
@@ -361,7 +411,11 @@ ${commandsSection(eng)}`;
     const satellites = (manifest.satellites || [])
       .map((s) => {
         const count = satelliteScripts.get(s)?.length || 0;
-        return `<tr><td><b>${esc(s.name)}</b>${count ? ` <span class="chip">${count} cmds</span>` : ""}</td><td class="doc">${esc(s.note)}</td><td class="mono">${s.url ? `<a href="${esc(s.url)}">${esc(s.url)}</a>` : esc(s.path || s.start || "")}</td></tr>`;
+        const art = avatarArt(s.id);
+        const face = art
+          ? `<img class="satellite-mascot" src="${esc(art)}" alt="" loading="lazy" decoding="async" width="32" height="32">`
+          : "";
+        return `<tr><td>${face}<b>${esc(s.name)}</b>${count ? ` <span class="chip">${count} cmds</span>` : ""}</td><td class="doc">${esc(s.note)}</td><td>${esc(manifest.owners?.[s.owner]?.name || "—")}</td><td class="mono">${s.url ? `<a href="${esc(s.url)}">${esc(s.url)}</a>` : esc(s.path || s.start || "")}</td></tr>`;
       })
       .join("");
     const satelliteCommands = [...satelliteScripts.entries()]
@@ -410,13 +464,14 @@ ${commandsSection(eng)}`;
     // Panels contribute their own section, and optionally a hero stat and a nav link.
     const panels = ctx.panels || [];
     const panelSections = panels
-      .map(({ panel, data }) => {
-        try {
-          return panel.render(data, { esc, cmdRow }) || "";
-        } catch (error) {
-          console.warn(`panel "${panel.id}" failed to render: ${error.message}`);
-          return "";
-        }
+      .map((entry) => {
+        const eng = entry.panel.engine
+          ? manifest.engines.find((candidate) => candidate.dir === entry.panel.engine)
+          : null;
+        return renderPanelHtml(entry, {
+          onEnginePage: false,
+          engineHref: eng ? commandsHref(eng) : null,
+        });
       })
       .filter(Boolean)
       .join("\n    ");
@@ -455,12 +510,12 @@ ${commandsSection(eng)}`;
     ].filter(Boolean).join("");
 
     const body = `
+<div class="company-navbar"><nav class="company-nav" aria-label="Company navigation"><div class="brand-lockup"><span class="brand-mark">${esc(brand.mark)}</span> ${esc(brand.name)}</div>
+  <div class="company-links">${navLinks}</div></nav></div>
 <header class="company-hero">
-  <nav class="company-nav" aria-label="Company navigation"><div class="brand-lockup"><span class="brand-mark">${esc(brand.mark)}</span> ${esc(brand.name)}</div>
-  <div class="company-links">${navLinks}</div></nav>
   <div class="hero-inner"><p class="hero-eyebrow"><span class="live-dot"></span> Local company online · ${alertCount ? `${alertCount} item${alertCount === 1 ? "" : "s"} need attention` : "all scheduled systems nominal"}</p>
-  <h1>${brand.headline}</h1>
-  <p class="hero-copy">${esc(brand.blurb)}</p>
+  <h1>${substituteCounts(brand.headline)}</h1>
+  <p class="hero-copy">${esc(substituteCounts(brand.blurb))}</p>
   <div class="company-stats">${statTiles}</div></div>
 </header>
 <main class="company-main">
@@ -476,7 +531,7 @@ ${commandsSection(eng)}`;
     <details class="ops-section" id="schedules" open><summary>${esc(brand.schedulesTitle)} <span class="section-count">${allTaskNames.length} jobs · live state</span></summary><div class="table-shell"><table><tr><th>Task</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>State</th></tr>${schedTable}</table></div></details>
     ${collectionSections}
     ${panelSections}
-    <details class="ops-section" id="satellites"><summary>Satellites & sites <span class="section-count">${manifest.satellites?.length || 0} connected properties</span></summary><div class="table-shell"><table><tr><th>What</th><th>Note</th><th>Where</th></tr>${satellites}</table></div>${satelliteCommands ? `<div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">Satellites have no engine page — their npm commands, read live from each package.json:</p><div class="scripts">${satelliteCommands}</div></div>` : ""}</details>
+    <details class="ops-section" id="satellites"><summary>Satellites & sites <span class="section-count">${manifest.satellites?.length || 0} connected properties</span></summary><div class="table-shell"><table><tr><th>What</th><th>Note</th><th>Owner</th><th>Where</th></tr>${satellites}</table></div>${satelliteCommands ? `<div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">Satellites have no engine page — their npm commands, read live from each package.json:</p><div class="scripts">${satelliteCommands}</div></div>` : ""}</details>
     ${reportRows ? `<details class="ops-section"><summary>${esc(reportsTitle)} <span class="section-count">latest 5 reports</span></summary><div class="table-shell"><table><tr><th>Target</th><th>Date</th><th>Report</th></tr>${reportRows}</table></div></details>` : ""}
     <details class="ops-section"><summary>Refresh this snapshot <span class="section-count">generator-safe</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${cmdRow(config.rebuildCommand)}</div></details>
   </section>

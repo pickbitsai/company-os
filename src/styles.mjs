@@ -56,6 +56,18 @@ a{color:var(--cyan)}
 .gap-list li b{color:var(--amber)}
 .gap-list .mono{color:#8a8aa0;font-size:11px}`;
 
+// Panel chrome for project pages. The company floor has its own themed versions of these rules.
+export function panelCss() {
+  return `
+.ops-section{margin-top:14px;border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden}
+.ops-section summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;color:var(--muted);cursor:pointer;font:700 12px ui-monospace,Consolas,monospace;letter-spacing:1px;text-transform:uppercase;list-style:none}
+.ops-section summary::-webkit-details-marker{display:none}
+.ops-section summary::after{content:"+";color:var(--cyan);font-size:18px}
+.ops-section[open] summary::after{content:"−"}
+.table-shell{overflow-x:auto;border-top:1px solid var(--line)}
+.table-shell table{min-width:720px}`;
+}
+
 // Built-in gradient backdrops. Deliberately abstract: they must read as "a place" behind
 // frosted panels without implying any particular company's art direction.
 const GRADIENTS = {
@@ -80,7 +92,8 @@ body.company-page[data-theme="anime"]{--company-art:${art("anime")};--company-in
 .company-hero::before{content:"";position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(3,15,18,.94) 0%,rgba(4,15,21,.68) 46%,rgba(4,15,21,.2) 100%),var(--company-art);background-position:center;background-size:cover;filter:saturate(.88);z-index:-2;transition:background-image .35s ease}
 .company-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,#07171b 100%);z-index:-1}
 .company-nav,.hero-inner,.company-main{width:min(1420px,calc(100% - 36px));margin-inline:auto}
-.company-nav{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+.company-navbar{position:sticky;top:0;z-index:50;background:var(--company-glass);backdrop-filter:blur(14px);border-bottom:1px solid var(--company-edge)}
+.company-nav{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 0}
 .brand-lockup{display:flex;align-items:center;gap:10px;font:700 12px/1 ui-monospace,Consolas,monospace;letter-spacing:2px;text-transform:uppercase}
 .brand-mark{display:grid;place-items:center;width:29px;height:29px;border:1px solid var(--cyan);border-radius:9px;color:var(--cyan);box-shadow:0 0 22px rgba(0,244,255,.18)}
 .company-links{display:flex;gap:16px;font-size:12px;color:#c7d1d2}.company-links a{text-decoration:none}.company-links a:hover{color:#fff}
@@ -115,6 +128,11 @@ body[data-theme="anime"] .theme-btn[aria-pressed="true"]{background:linear-gradi
 .workstation.has-art{display:grid;place-items:center;padding-bottom:6px;filter:none}
 .avatar-art{width:126px;height:126px;border-radius:20px;overflow:hidden;border:1px solid color-mix(in srgb,var(--acc) 42%,transparent);background:#080a1c;box-shadow:0 10px 26px rgba(0,0,0,.42),inset 0 0 20px color-mix(in srgb,var(--acc) 13%,transparent);transition:border-color .18s ease,box-shadow .25s ease}
 .avatar-art img{display:block;width:100%;height:100%;object-fit:cover}
+/* Engine sub-pages and the satellite table reuse the mascot set the floor already loads; both
+   degrade to no image at all when an install ships without avatar art. */
+.engine-mascot{float:right;width:96px;height:96px;margin:0 0 12px 16px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:#080a1c}
+.engine-mascot img{display:block;width:100%;height:100%;object-fit:cover}
+.satellite-mascot{width:32px;height:32px;border-radius:7px;vertical-align:middle;margin-right:9px;background:#080a1c;border:1px solid rgba(255,255,255,.1);object-fit:cover}
 .station:hover .avatar-art{border-color:color-mix(in srgb,var(--acc) 68%,white 10%)}
 .station.is-running .avatar-art{animation:monitorGlow 1.6s infinite alternate}
 .avatar-badge{position:absolute;right:12px;bottom:10px;z-index:3;padding:3px 8px;border-radius:999px;border:1px solid color-mix(in srgb,var(--acc) 45%,transparent);background:rgba(4,10,18,.84);color:var(--acc);font:700 8px ui-monospace,Consolas,monospace;letter-spacing:1.2px}

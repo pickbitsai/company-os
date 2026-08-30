@@ -13,19 +13,29 @@
 //   render(data, helpers)    -> HTML string, or "" to omit the section entirely
 //   nav                      optional label for the top navigation
 //   stat(data)               optional {label, value} for the hero stat row
+//   engine                   optional manifest engine `dir` that owns this panel (for example,
+//                            "avalanche"); when set, the panel also renders on that engine page
+//   renderEngine(data, h)    optional project-page renderer returning an HTML string
 //
 // Panels receive the whole config and manifest, so they can key results to projects.
 //
+// With no `engine`, a panel remains floor-only and uses render(). With `engine` but no
+// renderEngine(), render() is reused verbatim on the engine page. With both exports, render()
+// is the floor summary of what needs a person now and renderEngine() is the project's full
+// record: one collect(), rendered at two depths.
+//
 // PRIVACY: panels read genuinely sensitive material — env key names, session activity. They may
-// surface names, counts and status. They must never surface values or transcript content, and
-// panel output must never reach a publish target. `publicSnapshot` is a separate allowlist that
-// knows nothing about panels, which is what enforces the second half.
+// surface names, counts and status. They must never surface values or transcript content. The
+// floor and engine pages are both local files, and the `publicSnapshot` publish allowlist in
+// src/publish.mjs is built from manifest.engines only; it never reads generated HTML. Panel output
+// therefore still cannot reach a publish target.
 
 const BUILTINS = {
   env: () => import("./env.mjs"),
   docs: () => import("./docs.mjs"),
   gtm: () => import("./gtm.mjs"),
   intranet: () => import("./intranet.mjs"),
+  ownership: () => import("./ownership.mjs"),
   repos: () => import("./repos.mjs"),
   sessions: () => import("./sessions.mjs"),
   shape: () => import("./shape.mjs"),

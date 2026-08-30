@@ -224,6 +224,94 @@ await test("schtasks distinguishes running, terminated, and never-run results", 
   }
 });
 
+// ---------------------------------------------------------------- ownership
+const ownershipTmp = join(ROOT, "test", "tmp", "ownership");
+rmSync(ownershipTmp, { recursive: true, force: true });
+mkdirSync(ownershipTmp, { recursive: true });
+
+const ownershipManifest = {
+  owners: {
+    studio: { name: "Studio", what: "Builds and operates the accepted project slate." },
+  },
+  engines: [
+    { id: "owned", owner: "studio", dir: "packages/owned", name: "Owned Engine", class: "Tool", accent: "#00f4ff", role: "Owned test engine." },
+    { id: "unowned", dir: "packages/unowned", name: "Unowned Engine", class: "Tool", accent: "#ffcc44", role: "Unowned test engine." },
+  ],
+  satellites: [
+    { id: "owned-satellite", owner: "studio", name: "Owned Satellite", note: "Owned test satellite." },
+    { id: "unowned-satellite", name: "Unowned Satellite", note: "Unowned test satellite." },
+  ],
+};
+
+function ownershipConfig(name, doc, overrides = {}) {
+  const manifestPath = join(ownershipTmp, `${name}.json`);
+  writeFileSync(manifestPath, JSON.stringify(doc, null, 2));
+  return {
+    ...config,
+    manifest: manifestPath,
+    outDir: join(ownershipTmp, `${name}-out`),
+    governance: null,
+    requireGovernance: false,
+    intranet: null,
+    reports: null,
+    publish: [],
+    panels: { ownership: {} },
+    brand: {
+      ...config.brand,
+      headline: "{engineCount} engines.<br>One living company.",
+      blurb: "{satelliteCount} satellites are connected.",
+    },
+    ...overrides,
+  };
+}
+
+await test("an owner id absent from manifest.owners fails the build", async () => {
+  const invalid = { ...ownershipManifest, engines: ownershipManifest.engines.map((eng, index) => index ? eng : { ...eng, owner: "nobody" }) };
+  await assert.rejects(
+    () => build(ownershipConfig("unknown-owner", invalid), { log: () => {}, warn: () => {} }),
+    /owner "nobody" on engine owned is not declared in manifest\.owners/,
+  );
+});
+
+await test("an id shared by an engine and satellite fails the build", async () => {
+  const invalid = { ...ownershipManifest, satellites: [{ ...ownershipManifest.satellites[0], id: "owned" }] };
+  await assert.rejects(
+    () => build(ownershipConfig("duplicate-id", invalid), { log: () => {}, warn: () => {} }),
+    /duplicate id "owned" appears in both engines and satellites/,
+  );
+});
+
+let ownershipFloor = "";
+await test("a project with no owner builds and lands in the Unassigned row", async () => {
+  const ownedConfig = ownershipConfig("unassigned", ownershipManifest);
+  await build(ownedConfig, { log: () => {}, warn: () => {} });
+  ownershipFloor = readFileSync(join(ownedConfig.outDir, "index.html"), "utf8");
+  const section = ownershipFloor.match(/id="ownership"[\s\S]*?<\/details>/)[0];
+  assert.match(section, /<b>Unassigned<\/b>[\s\S]*?class="chip warn">Unowned Engine, Unowned Satellite<\/span>/);
+});
+
+await test("the ownership panel shows an ok chip when every project has an owner", async () => {
+  const allOwned = {
+    ...ownershipManifest,
+    engines: ownershipManifest.engines.map((eng) => ({ ...eng, owner: "studio" })),
+    satellites: ownershipManifest.satellites.map((satellite) => ({ ...satellite, owner: "studio" })),
+  };
+  const ownedConfig = ownershipConfig("all-owned", allOwned);
+  await build(ownedConfig, { log: () => {}, warn: () => {} });
+  const floor = readFileSync(join(ownedConfig.outDir, "index.html"), "utf8");
+  assert.match(floor, /class="chip ok">every project has an owner<\/span>/);
+});
+
+await test("brand engine-count tokens render as English words", () => {
+  assert.match(ownershipFloor, /<h1>Two engines\.<br>One living company\.<\/h1>/);
+});
+
+await test("the satellites table includes Owner between Note and Where", () => {
+  assert.match(ownershipFloor, /<th>What<\/th><th>Note<\/th><th>Owner<\/th><th>Where<\/th>/);
+});
+
+rmSync(ownershipTmp, { recursive: true, force: true });
+
 // ---------------------------------------------------------------- panels
 await test("docs panel reports gaps, not just an inventory", () => {
   const floor = page("index.html");
