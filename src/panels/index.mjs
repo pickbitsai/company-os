@@ -36,6 +36,7 @@ const BUILTINS = {
   gtm: () => import("./gtm.mjs"),
   intranet: () => import("./intranet.mjs"),
   ownership: () => import("./ownership.mjs"),
+  policy: () => import("./policy.mjs"),
   repos: () => import("./repos.mjs"),
   sessions: () => import("./sessions.mjs"),
   shape: () => import("./shape.mjs"),

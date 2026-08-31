@@ -162,7 +162,9 @@ export function render(data, { esc, cmdRow }) {
 
   return `<details class="ops-section" id="env"${unignored.length ? " open" : ""}><summary>${esc(title)} <span class="section-count">${data.rows.length} env file${data.rows.length === 1 ? "" : "s"} · ${exposed} plaintext credential${exposed === 1 ? "" : "s"}</span></summary>
 <div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${lead}
-<p class="doc">This page is a static file, so it stops at status and counts — <b>no values, and no key names, are ever written into it</b>. To reveal, copy or edit a value, open the enview manager: a localhost server that reads on demand, persists nothing, and writes a timestamped backup before every change.</p>
+<p class="doc">This page is a static file, so it stops at status and counts — <b>no values are ever written into it</b>. ${data.showKeys
+    ? `Key <em>names</em> are listed below because <span class="mono">showKeyNames</span> is on for this build; a name still tells a reader which services you use.`
+    : `<b>Key names are not written into it either</b>, because a name still tells a reader which services you use.`} To reveal, copy or edit a value, open the enview manager: a localhost server that reads on demand, persists nothing, and writes a timestamped backup before every change.</p>
 <div class="chips"><span class="chip chip-link"><a href="${esc(data.uiUrl)}">open enview manager →</a></span></div>
 ${cmdRow(data.uiCommand)}</div>
 <div class="table-shell"><table><tr><th>Project</th><th>File</th><th>Env</th><th>Keys</th><th>Credential-shaped</th><th>Encrypted</th><th>git</th><th>Modified</th></tr>${rows}</table></div>
