@@ -44,6 +44,15 @@ Those answers already existed, scattered across `package.json` files, Task Sched
 
 **Refuses to clobber your work.** The generator only overwrites files carrying its own generated marker. A hand-authored dashboard in a project directory survives — and gets a separate `ops-commands.html` so its commands still appear somewhere.
 
+## Parent-owned intranet pages
+
+An optional discovery scan inventories nested `index.html` pages without taking ownership of
+them. A reviewed registry maps source files to page generators; interaction-time and scheduled
+sweeps then check freshness, local links, and agent-maintenance rules. Regeneration is opt-in per
+page. Publication, dispatch, deletion, and approval are outside the subsystem's authority.
+
+See [`docs/INTRANET.md`](docs/INTRANET.md) for configuration and commands.
+
 ## Configuration
 
 `company-os.config.mjs`, resolved relative to itself:
@@ -70,6 +79,8 @@ export default {
 ```
 
 The manifest is one entry per project. See [`schemas/engines.schema.json`](schemas/engines.schema.json) for every field, and [`examples/acme/engines.json`](examples/acme/engines.json) for a worked example that exercises all of them.
+
+Deciding *which* directories earn an entry — and what to declare for each kind of project — is the part that actually takes an hour. [`docs/ORGANIZING.md`](docs/ORGANIZING.md) is the guide: the five kinds of project, the minimum each one must declare, and a finish line so the manifest doesn't sit half-written.
 
 ```jsonc
 {
@@ -126,6 +137,7 @@ Panels answer one question across every project at once. Each is off unless conf
 panels: {
   docs: {},                                          // no dependencies
   env: { roots: ["."], showKeyNames: false },        // needs: npm i enview
+  gtm: { file: "./portfolio-gtm.json" },              // no dependencies; evidence-led GTM contract
   sessions: { url: "http://127.0.0.1:4173" },        // needs: Session Index running
 }
 ```
@@ -134,9 +146,27 @@ panels: {
 |---|---|---|
 | `docs` | nothing | Which projects have no README, no `CLAUDE.md`, no `AGENTS.md`, or a `.env` with no `.env.example` |
 | `env` | [`enview`](https://github.com/pickbitsai/enView) ≥ 0.2.0 | Where every `.env` lives, how many credential-shaped keys it holds, whether it's encrypted, and whether git is tracking it |
+| `gtm` | `portfolio-gtm.json` | Which products lead, validate, or wait; their audience, hook, route, proof gate, confidence, and evidence |
 | `sessions` | [Session Index](https://github.com/pickbitsai/session-index) on localhost | Which projects your Claude and Codex sessions actually ran in, and what's worth picking back up |
 
 Panels lead with **what's wrong**, not an inventory. A grid of checkmarks reads as "fine" at a glance even when four projects have no documentation; `⚠ 3 projects have no README` does not.
+
+### Agent-ready portfolio GTM (opt-in)
+
+Company OS includes a reusable GTM skill, but installing the package does not alter your agent
+configuration. Install it explicitly in the repository where the agent will work:
+
+```bash
+npx company-os skills list
+npx company-os skills install portfolio-gtm
+```
+
+This writes `.claude/skills/company-os-portfolio-gtm/` and keeps an existing copy untouched. The
+skill consolidates project evidence into one lean portfolio decision record; it does not publish,
+buy ads, change prices, contact users, or edit live products. Track its output by enabling the
+`gtm` panel above and writing a file that follows
+[`schemas/portfolio-gtm.schema.json`](schemas/portfolio-gtm.schema.json). The fictional
+[`examples/acme/portfolio-gtm.json`](examples/acme/portfolio-gtm.json) shows the complete contract.
 
 ### What panels will not show you
 
@@ -180,7 +210,7 @@ Then `npx company-os build --sites-only` refreshes just those.
 This repo contains no manifest but the fictional one. `npm run leakscan` scans everything in the `files` allowlist for absolute paths, credentials, literal private schema ids, and — if a real manifest happens to be on the machine — that manifest's own ports and task names. It runs on `prepublishOnly`, so a publish cannot skip it.
 
 ```bash
-npm test         # 37 tests; builds the Acme example and asserts on the output
+npm test         # builds the Acme example and asserts on the output
 npm run test:consumer # packs, installs, and runs the CLI as a clean consumer
 npm run leakscan
 npm run preflight  # leakscan + tests + clean-consumer install

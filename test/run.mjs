@@ -5,11 +5,24 @@
 // does, so a break shows up as a wrong page rather than a failed mock.
 
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { build, loadConfig } from "../src/index.mjs";
+import {
+  BUNDLED_SKILLS,
+  build,
+  deriveStatus,
+  discoverIntranet,
+  installBundledSkill,
+  installIntranetAgentRules,
+  loadConfig,
+  maintainIntranet,
+  readBundledSkill,
+  writeIntranetRegistry,
+} from "../src/index.mjs";
+import { INTRANET_SKILL } from "../src/intranet.mjs";
 import { publicFacts, publicSnapshot } from "../src/publish.mjs";
 import { scanScripts, wiredScripts } from "../src/scripts.mjs";
 import { companyCss } from "../src/styles.mjs";
@@ -112,7 +125,11 @@ await test("with no scheduler, declared tasks are not reported as missing", () =
 await test("a station is not marked alert because of unobserved tasks", () => {
   const floor = page("index.html");
   const signalCard = floor.match(/<article class="station ([a-z-]+)"[^>]*aria-label="Signal[^"]*"/);
-  assert.equal(signalCard[1], "is-healthy", "unobserved is not failing");
+  // Assert the actual claim — unobserved is not FAILING — rather than the old proxy of
+  // is-healthy. Signal publishes no status feed, so its honest resting state is unreported;
+  // pinning this to is-healthy would re-encode the bug the unreported state exists to fix.
+  assert.notEqual(signalCard[1], "is-alert", "unobserved is not failing");
+  assert.equal(signalCard[1], "is-unreported", "and with no feed it cannot claim health either");
 });
 
 // ---------------------------------------------------------------- white-label defaults
@@ -180,6 +197,122 @@ await test("cron adapter parses schedules and reports no false outcome", async (
   assert.equal(typeof mod.loadTasks, "function");
 });
 
+await test("schtasks distinguishes running, terminated, and never-run results", async () => {
+  const original = childProcess.execFileSync;
+  childProcess.execFileSync = () => [
+    '"HostName","TaskName","Next Run Time","Last Run Time","Last Result","Status","Scheduled Task State","Schedule Type","Start Time","Repeat: Every"',
+    '"HOST","\\running","N/A","8/15/2026 1:00:00 AM","267009","Running","Enabled","Daily","1:00:00 AM","Disabled"',
+    '"HOST","\\terminated","N/A","8/15/2026 2:00:00 AM","267014","Ready","Enabled","Daily","2:00:00 AM","Disabled"',
+    '"HOST","\\new-task","N/A","N/A","267011","Ready","Enabled","Daily","3:00:00 AM","Disabled"',
+  ].join("\n");
+  try {
+    const { loadTasks } = await import("../src/adapters/schtasks.mjs");
+    const tasks = loadTasks();
+    assert.deepEqual(
+      { state: tasks.get("running").state, ok: tasks.get("running").ok },
+      { state: "running", ok: null },
+    );
+    assert.deepEqual(
+      { state: tasks.get("terminated").state, ok: tasks.get("terminated").ok },
+      { state: "failed", ok: false },
+    );
+    assert.deepEqual(
+      { state: tasks.get("new-task").state, ok: tasks.get("new-task").ok },
+      { state: "never-ran", ok: null },
+    );
+  } finally {
+    childProcess.execFileSync = original;
+  }
+});
+
+// ---------------------------------------------------------------- ownership
+const ownershipTmp = join(ROOT, "test", "tmp", "ownership");
+rmSync(ownershipTmp, { recursive: true, force: true });
+mkdirSync(ownershipTmp, { recursive: true });
+
+const ownershipManifest = {
+  owners: {
+    studio: { name: "Studio", what: "Builds and operates the accepted project slate." },
+  },
+  engines: [
+    { id: "owned", owner: "studio", dir: "packages/owned", name: "Owned Engine", class: "Tool", accent: "#00f4ff", role: "Owned test engine." },
+    { id: "unowned", dir: "packages/unowned", name: "Unowned Engine", class: "Tool", accent: "#ffcc44", role: "Unowned test engine." },
+  ],
+  satellites: [
+    { id: "owned-satellite", owner: "studio", name: "Owned Satellite", note: "Owned test satellite." },
+    { id: "unowned-satellite", name: "Unowned Satellite", note: "Unowned test satellite." },
+  ],
+};
+
+function ownershipConfig(name, doc, overrides = {}) {
+  const manifestPath = join(ownershipTmp, `${name}.json`);
+  writeFileSync(manifestPath, JSON.stringify(doc, null, 2));
+  return {
+    ...config,
+    manifest: manifestPath,
+    outDir: join(ownershipTmp, `${name}-out`),
+    governance: null,
+    requireGovernance: false,
+    intranet: null,
+    reports: null,
+    publish: [],
+    panels: { ownership: {} },
+    brand: {
+      ...config.brand,
+      headline: "{engineCount} engines.<br>One living company.",
+      blurb: "{satelliteCount} satellites are connected.",
+    },
+    ...overrides,
+  };
+}
+
+await test("an owner id absent from manifest.owners fails the build", async () => {
+  const invalid = { ...ownershipManifest, engines: ownershipManifest.engines.map((eng, index) => index ? eng : { ...eng, owner: "nobody" }) };
+  await assert.rejects(
+    () => build(ownershipConfig("unknown-owner", invalid), { log: () => {}, warn: () => {} }),
+    /owner "nobody" on engine owned is not declared in manifest\.owners/,
+  );
+});
+
+await test("an id shared by an engine and satellite fails the build", async () => {
+  const invalid = { ...ownershipManifest, satellites: [{ ...ownershipManifest.satellites[0], id: "owned" }] };
+  await assert.rejects(
+    () => build(ownershipConfig("duplicate-id", invalid), { log: () => {}, warn: () => {} }),
+    /duplicate id "owned" appears in both engines and satellites/,
+  );
+});
+
+let ownershipFloor = "";
+await test("a project with no owner builds and lands in the Unassigned row", async () => {
+  const ownedConfig = ownershipConfig("unassigned", ownershipManifest);
+  await build(ownedConfig, { log: () => {}, warn: () => {} });
+  ownershipFloor = readFileSync(join(ownedConfig.outDir, "index.html"), "utf8");
+  const section = ownershipFloor.match(/id="ownership"[\s\S]*?<\/details>/)[0];
+  assert.match(section, /<b>Unassigned<\/b>[\s\S]*?class="chip warn">Unowned Engine, Unowned Satellite<\/span>/);
+});
+
+await test("the ownership panel shows an ok chip when every project has an owner", async () => {
+  const allOwned = {
+    ...ownershipManifest,
+    engines: ownershipManifest.engines.map((eng) => ({ ...eng, owner: "studio" })),
+    satellites: ownershipManifest.satellites.map((satellite) => ({ ...satellite, owner: "studio" })),
+  };
+  const ownedConfig = ownershipConfig("all-owned", allOwned);
+  await build(ownedConfig, { log: () => {}, warn: () => {} });
+  const floor = readFileSync(join(ownedConfig.outDir, "index.html"), "utf8");
+  assert.match(floor, /class="chip ok">every project has an owner<\/span>/);
+});
+
+await test("brand engine-count tokens render as English words", () => {
+  assert.match(ownershipFloor, /<h1>Two engines\.<br>One living company\.<\/h1>/);
+});
+
+await test("the satellites table includes Owner between Note and Where", () => {
+  assert.match(ownershipFloor, /<th>What<\/th><th>Note<\/th><th>Owner<\/th><th>Where<\/th>/);
+});
+
+rmSync(ownershipTmp, { recursive: true, force: true });
+
 // ---------------------------------------------------------------- panels
 await test("docs panel reports gaps, not just an inventory", () => {
   const floor = page("index.html");
@@ -195,6 +328,37 @@ await test("docs panel only flags .env.example where a .env exists", () => {
   // company gets a permanent finding it cannot action.
   const section = page("index.html").match(/id="docs"[\s\S]*?<\/details>/)[0];
   assert.ok(!section.includes(".env.example"), "no .env anywhere, so no .env.example gap");
+});
+
+await test("GTM panel renders the portfolio call and every lean-strategy field", () => {
+  const floor = page("index.html");
+  const section = floor.match(/id="gtm"[\s\S]*?<\/details>/)[0];
+  assert.match(section, /Portfolio call:/);
+  assert.match(section, /Signal Briefing/);
+  assert.match(section, /Forge Production Kit/);
+  assert.match(section, /<th>Audience<\/th>/);
+  assert.match(section, /<th>Hook &amp; route<\/th>/);
+  assert.match(section, /<th>Advance when<\/th>/);
+  assert.match(section, /Evidence gap:/);
+  assert.match(floor, /<b>2<\/b><span>GTM strategies<\/span>/);
+});
+
+await test("GTM validation rejects ungrounded or ambiguous records", async () => {
+  const { validatePortfolioGtm } = await import("../src/panels/gtm.mjs");
+  const valid = JSON.parse(readFileSync(join(ACME, "portfolio-gtm.json"), "utf8"));
+  assert.equal(validatePortfolioGtm(valid), valid);
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [{ ...valid.products[0], evidence: [] }] }),
+    /evidence must contain at least one/,
+  );
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [valid.products[0], valid.products[0]] }),
+    /duplicate product id/,
+  );
+  assert.throws(
+    () => validatePortfolioGtm({ ...valid, products: [{ ...valid.products[0], inventedScore: 92 }] }),
+    /unknown field/,
+  );
 });
 
 await test("an unconfigured panel renders nothing at all", () => {
@@ -219,6 +383,23 @@ await test("a panel whose optional tool is missing is skipped, not fatal", async
   rmSync(join(ACME, ".test-out"), { recursive: true, force: true });
 });
 
+// ---------------------------------------------------------------- bundled skills
+await test("portfolio GTM skill installs explicitly and never overwrites a local copy", () => {
+  const fixtures = join(ROOT, "test", "tmp", "bundled-skills");
+  rmSync(fixtures, { recursive: true, force: true });
+  mkdirSync(fixtures, { recursive: true });
+
+  const installed = installBundledSkill("portfolio-gtm", { targetRoot: fixtures });
+  const installedAgain = installBundledSkill("portfolio-gtm", { targetRoot: fixtures });
+  const skillRoot = join(fixtures, ".claude", "skills", "company-os-portfolio-gtm");
+  assert.equal(installed.action, "created");
+  assert.equal(installedAgain.action, "kept");
+  assert.ok(existsSync(join(skillRoot, "SKILL.md")));
+  assert.ok(existsSync(join(skillRoot, "agents", "openai.yaml")));
+  assert.match(readFileSync(join(skillRoot, "SKILL.md"), "utf8"), /does not authorize publishing/);
+
+  rmSync(fixtures, { recursive: true, force: true });
+});
 
 // ---------------------------------------------------------------- env panel privacy contract
 // The highest-consequence panel in the package: it reads .env files, and its output is a static
@@ -474,6 +655,207 @@ console.log("\n--- shape panel ---");
 
   rmSync(fixtures, { recursive: true, force: true });
 }
+
+// ---------------------------------------------------------------- parent-owned intranet
+console.log("\n--- intranet ---");
+{
+  const fixtures = join(ROOT, "test", "tmp", "intranet");
+  rmSync(fixtures, { recursive: true, force: true });
+  const write = (rel, content) => {
+    const path = join(fixtures, rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, content);
+  };
+  write("project/index.html", "<!doctype html><title>Project home</title><a href=\"docs/index.html\">Docs</a>");
+  write("project/docs/index.html", "<!doctype html><title>Project docs</title><a href=\"missing.html\">Missing</a>");
+  write("project/node_modules/noise/index.html", "<title>Dependency</title>");
+  write("project/editions/2026-01-01/index.html", "<title>Generated edition</title>");
+  write("project/content/input.md", "# changed");
+  write("project/scripts/build-index.mjs", `import { writeFileSync } from "node:fs";
+writeFileSync("index.html", "<!doctype html><title>Project home</title><a href=\\\"docs/index.html\\\">Docs</a>");`);
+
+  const intranetConfig = {
+    root: fixtures,
+    schemaPrefix: "test",
+    generatedMark: "<!-- generated by company-os",
+    rebuildCommand: "company-os build",
+    intranet: {
+      registry: join(fixtures, "intranet.json"),
+      state: join(fixtures, "intranet-state.json"),
+      maxDepth: 4,
+      requireAgentRule: true,
+      requireAgentSkill: true,
+      agentCommand: "company-os intranet maintain --changed <path>",
+    },
+  };
+  const intranetManifest = {
+    engines: [{ id: "project", dir: "project", name: "Project" }],
+  };
+
+  const discovered = discoverIntranet(intranetConfig, intranetManifest);
+  await test("intranet discovery finds owned child indexes but skips dependency and edition output", () => {
+    assert.deepEqual(discovered.pages.map((item) => item.projectPath), ["docs/index.html", "index.html"]);
+    assert.ok(discovered.pages.every((item) => item.registration === "candidate"));
+  });
+
+  const configuredPages = discovered.pages.map((item) => ({
+    ...item,
+    registration: "accepted",
+    sources: ["content/**"],
+    generator: item.projectPath === "index.html" ? "node scripts/build-index.mjs" : "npm run publish",
+    authority: { regenerate: true, publish: true, delete: true },
+  }));
+  writeIntranetRegistry(intranetConfig, { ...discovered, pages: configuredPages });
+
+  const maintained = await maintainIntranet(intranetConfig, intranetManifest, {
+    mode: "interaction",
+    changedPaths: ["project/content/input.md"],
+    execute: true,
+  });
+  await test("a changed registered source runs its accepted safe page generator", () => {
+    assert.ok(maintained.actions.some((item) => item.pageId === "project-home" && item.action === "regenerated"));
+  });
+  await test("intranet maintenance blocks commands that cross the publication boundary", () => {
+    assert.ok(maintained.actions.some((item) => item.action === "blocked" && /authority boundary/.test(item.reason)));
+    assert.equal(maintained.summary.blocked, 1);
+  });
+  await test("registry discovery forcibly keeps publish and delete authority false", () => {
+    const rescanned = discoverIntranet(intranetConfig, intranetManifest);
+    assert.ok(rescanned.pages.every((item) => item.authority.publish === false && item.authority.delete === false));
+  });
+
+  const checked = await maintainIntranet(intranetConfig, intranetManifest, {
+    mode: "check",
+    execute: false,
+  });
+  await test("intranet health catches broken local links", () => {
+    const docs = checked.pages.find((item) => item.projectPath === "docs/index.html");
+    assert.equal(docs.status, "broken");
+    assert.equal(docs.links.broken[0].href, "missing.html");
+  });
+
+  const installed = installIntranetAgentRules(intranetConfig, intranetManifest);
+  const installedAgain = installIntranetAgentRules(intranetConfig, intranetManifest);
+  await test("agent maintenance installation appends a bounded rule and installs the skill idempotently", () => {
+    assert.equal(installed[0].ruleAction, "created");
+    assert.equal(installed[0].skillAction, "created");
+    assert.equal(installedAgain[0].ruleAction, "kept");
+    assert.equal(installedAgain[0].skillAction, "kept");
+    assert.match(readFileSync(join(fixtures, "project", "AGENTS.md"), "utf8"), /company-os:intranet/);
+    assert.ok(existsSync(join(fixtures, "project", ".claude", "skills", "company-os-intranet-maintainer", "SKILL.md")));
+  });
+
+  rmSync(fixtures, { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------- project status honesty
+//
+// The station light must never assert health it has no source for. Before this, an engine that
+// published nothing still rendered "all systems nominal" purely because it owned a scheduled task
+// that had not failed — but a job can exit 0 by design while holding a backlog of operator
+// decisions, so a green light there was the dashboard inventing an assurance.
+const STATUS_ENGINE = join(ACME, "packages", "signal", "intranet", "project-status.json");
+const statusOut = join(ACME, ".status-out");
+const buildStatus = async () => {
+  await build({ ...config, outDir: statusOut }, { argv: [], log: () => {}, warn: () => {} });
+  return readFileSync(join(statusOut, "index.html"), "utf8");
+};
+const writeStatus = (over) => {
+  mkdirSync(dirname(STATUS_ENGINE), { recursive: true });
+  writeFileSync(STATUS_ENGINE, JSON.stringify({
+    schemaVersion: `${config.schemaPrefix}.project-status/v1`,
+    projectId: "signal",
+    name: "Signal",
+    statusPage: "index.html",
+    updatedAt: new Date().toISOString(),
+    health: "nominal",
+    headline: "Nothing owed.",
+    metrics: {},
+    activity: [],
+    todos: [],
+    security: { state: "current", lastScanAt: null, scope: "repo", summary: "clean" },
+    ...over,
+  }, null, 2));
+};
+
+await test("an engine with no status feed reads as unreported, never nominal", async () => {
+  rmSync(dirname(STATUS_ENGINE), { recursive: true, force: true });
+  const floor = await buildStatus();
+  assert.match(floor, /no status feed/, "absence of evidence must be stated");
+  assert.ok(!floor.includes("all systems nominal"), "a task exit code is not a health report");
+});
+
+await test("a fresh nominal feed still lights the station green", async () => {
+  writeStatus({});
+  const floor = await buildStatus();
+  assert.match(floor, /project nominal/, "a real, current feed is what green is for");
+});
+
+await test("a feed past its freshness budget reports staleness instead of its own health", async () => {
+  const old = new Date(Date.now() - 60 * 86400000).toISOString();
+  writeStatus({ updatedAt: old, health: "nominal" });
+  const floor = await buildStatus();
+  assert.match(floor, /status \d+d stale/, "an unrefreshed feed must say how old it is");
+  assert.ok(!floor.includes("project nominal"), "a 60-day-old 'nominal' is not evidence of one");
+});
+
+await test("a corrupt feed degrades to unreported rather than to green", async () => {
+  mkdirSync(dirname(STATUS_ENGINE), { recursive: true });
+  writeFileSync(STATUS_ENGINE, "{ not json");
+  const floor = await buildStatus();
+  assert.match(floor, /no status feed/, "an unreadable feed is the same as no feed");
+  assert.ok(!floor.includes("all systems nominal"));
+  rmSync(dirname(STATUS_ENGINE), { recursive: true, force: true });
+  rmSync(statusOut, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------- derived baseline status
+await test("a derived feed reports only verifiable facts and never claims health", () => {
+  // Derive against this repository: it is a real git checkout, so every field has a real source.
+  const derived = deriveStatus(ROOT, { id: "company-os", name: "Company OS", schemaPrefix: "test" });
+  assert.ok(derived, "company-os is a git repo, so a baseline is derivable");
+  assert.equal(derived.health, "on-demand", "commit activity is not health and must not be sold as it");
+  assert.match(derived.headline, /Auto-derived baseline/, "a baseline must announce itself as one");
+  assert.deepEqual(derived.todos, [], "a derived feed cannot know what is owed");
+  assert.equal(derived.security.state, "unknown", "no scan wired means unknown, not clean");
+  assert.equal(typeof derived.metrics.commitsLast30d, "number");
+  for (const item of derived.activity) {
+    assert.ok(Number.isFinite(Date.parse(item.at)), "every activity entry carries a real timestamp");
+    assert.ok(item.detail && item.detail.length, "and a real subject");
+  }
+});
+
+await test("a directory with no git history yields no feed at all", () => {
+  const empty = join(ROOT, "test", "tmp", "not-a-repo");
+  mkdirSync(empty, { recursive: true });
+  assert.equal(deriveStatus(empty, { id: "x", name: "X" }), null, "inventing a feed is worse than none");
+  rmSync(join(ROOT, "test", "tmp", "not-a-repo"), { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------- bundled skills are single-sourced
+await test("every bundled skill is listable, and the intranet one is not a second copy", () => {
+  const ids = BUNDLED_SKILLS.map((s) => s.id);
+  assert.ok(ids.includes("intranet-maintainer"),
+    "install-agent-rules installs this skill and intranet.mjs marks pages needs-review without it, so it must be reachable through `skills install` like any other");
+  // The text install-agent-rules writes MUST be the bundled file, not a literal beside it. These
+  // had already drifted once — seven numbered steps against six — and a skill file is a
+  // behavioural contract, so two versions means two different sets of rules in play.
+  assert.equal(INTRANET_SKILL, readBundledSkill("intranet-maintainer"),
+    "INTRANET_SKILL must read the bundled file rather than restate it");
+  for (const skill of BUNDLED_SKILLS) {
+    assert.ok(existsSync(join(ROOT, "skills", skill.name, "SKILL.md")), `${skill.id} has no SKILL.md on disk`);
+    assert.doesNotThrow(() => readBundledSkill(skill.id), `${skill.id} is listed but unreadable`);
+  }
+});
+
+await test("the organizing guide the README sends people to exists", () => {
+  // A dead link in a README is cheap; a dead link that the README describes as "the guide" to the
+  // hour-long part of setup is a promise the package does not keep.
+  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+  for (const [, link] of readme.matchAll(/\]\((docs\/[^)]+\.md)\)/g)) {
+    assert.ok(existsSync(join(ROOT, link)), `README links to ${link}, which does not exist`);
+  }
+});
 
 // ---------------------------------------------------------------- summary
 console.log(`\n${failures.length ? `FAIL — ${failures.length} of ${passed + failures.length}` : `PASS — ${passed} tests`}`);

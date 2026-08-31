@@ -11,6 +11,7 @@ import { engineScripts, ownsOwnIndex } from "./scripts.mjs";
 import { writeSnapshots } from "./publish.mjs";
 import { runPanels } from "./panels/index.mjs";
 import { loadTasksSafely } from "./scheduler.mjs";
+import { maintainIntranet } from "./intranet.mjs";
 
 function loadGovernance(config) {
   if (!config.governance) return null;
@@ -41,12 +42,47 @@ function validateGovernance({ manifest, governance, config }) {
   }
 }
 
+// Identity and ownership are manifest invariants, regardless of whether governance is enabled.
+// A dashboard that quietly drops an unknown owner or resolves an ambiguous id is less trustworthy
+// than a build that stops and names the bad row.
+function validateManifest(manifest) {
+  const engines = manifest.engines;
+  const satellites = Array.isArray(manifest.satellites) ? manifest.satellites : [];
+  const engineIds = new Set();
+  const satelliteIds = new Set();
+
+  for (const eng of engines) {
+    if (engineIds.has(eng.id)) throw new Error(`duplicate engine id "${eng.id}"`);
+    engineIds.add(eng.id);
+  }
+  for (const satellite of satellites) {
+    if (!satellite.id) continue;
+    if (satelliteIds.has(satellite.id)) throw new Error(`duplicate satellite id "${satellite.id}"`);
+    satelliteIds.add(satellite.id);
+  }
+  for (const id of engineIds) {
+    if (satelliteIds.has(id)) {
+      throw new Error(`duplicate id "${id}" appears in both engines and satellites`);
+    }
+  }
+
+  const owners = new Set(Object.keys(manifest.owners || {}));
+  for (const [kind, rows] of [["engine", engines], ["satellite", satellites]]) {
+    for (const row of rows) {
+      if (Object.hasOwn(row, "owner") && !owners.has(row.owner)) {
+        throw new Error(`owner "${row.owner}" on ${kind} ${row.id || row.name} is not declared in manifest.owners`);
+      }
+    }
+  }
+}
+
 export async function build(config, { argv = [], log = console.log, warn = console.warn, now = new Date() } = {}) {
   const sitesOnly = argv.includes("--sites-only");
   const manifest = JSON.parse(readFileSync(config.manifest, "utf8"));
   if (!Array.isArray(manifest.engines)) {
     throw new Error(`${config.manifest} has no "engines" array`);
   }
+  validateManifest(manifest);
   const governance = loadGovernance(config);
   validateGovernance({ manifest, governance, config });
 
@@ -57,11 +93,25 @@ export async function build(config, { argv = [], log = console.log, warn = conso
   const nowIso = now.toISOString();
   const stamp = now.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
+  // The normal scheduled Company OS rebuild doubles as the intranet maintenance sweep when
+  // configured. It always scans and validates. Generator execution remains a separate opt-in,
+  // and each page must also be accepted and explicitly grant regeneration authority.
+  const intranetState = !sitesOnly && config.intranet?.maintainOnBuild
+    ? await maintainIntranet(config, manifest, {
+      mode: "scheduled-sweep",
+      execute: config.intranet.executeOnBuild === true,
+      now,
+      log,
+    })
+    : null;
+
   // Panels run before rendering because several contribute a hero stat and a nav link. A panel
   // that cannot collect (optional tool absent, viewer not running) is warned about and dropped.
-  const panels = await runPanels({ config, manifest, governance, tasks, nowIso }, { warn });
+  const panels = await runPanels({ config, manifest, governance, tasks, nowIso, intranetState }, { warn });
 
-  const renderer = createRenderer({ config, manifest, governance, tasks, stamp, nowIso, schedulerId, observesScheduler, panels });
+  const renderer = createRenderer({
+    config, manifest, governance, tasks, stamp, nowIso, schedulerId, observesScheduler, panels, intranetState,
+  });
 
   function safeWrite(path, html) {
     if (existsSync(path)) {

@@ -8,7 +8,18 @@
 
 export { build } from "./build.mjs";
 export { DEFAULT_BRAND, findConfig, loadConfig, normalizeConfig } from "./config.mjs";
+export { deriveStatus, writeDerivedStatus } from "./derive-status.mjs";
 export { defaultScheduler, resolveScheduler } from "./scheduler.mjs";
 export { publicSnapshot } from "./publish.mjs";
 export { engineScripts, scanScripts, wiredScripts } from "./scripts.mjs";
+export { BUNDLED_SKILLS, installBundledSkill, readBundledSkill } from "./skills.mjs";
+export {
+  discoverIntranet,
+  globToRegExp,
+  installIntranetAgentRules,
+  loadIntranetRegistry,
+  loadIntranetState,
+  maintainIntranet,
+  writeIntranetRegistry,
+} from "./intranet.mjs";
 export { CSS, companyCss } from "./styles.mjs";

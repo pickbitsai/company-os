@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pickbitsai/company-os/schemas/intranet.schema.json",
+  "title": "Company OS intranet registry",
+  "type": "object",
+  "required": ["schemaVersion", "pages"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "\\.intranet-registry/v1$"
+    },
+    "scannedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "projectId",
+          "path",
+          "title",
+          "registration",
+          "ownership",
+          "sources",
+          "authority"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "projectId": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "path": { "type": "string", "description": "Page path relative to the Company OS root." },
+          "projectPath": { "type": "string", "description": "Page path relative to the owning repository." },
+          "title": { "type": "string", "minLength": 1 },
+          "registration": { "enum": ["candidate", "accepted", "ignored"] },
+          "ownership": { "enum": ["company-os", "repository"] },
+          "generator": { "type": ["string", "null"] },
+          "sources": { "type": "array", "items": { "type": "string" } },
+          "maintainOn": {
+            "type": "array",
+            "items": { "enum": ["source-change", "interaction-end", "scheduled-sweep"] }
+          },
+          "agentMaintenance": {
+            "type": "boolean",
+            "description": "Set false only when a page has no interaction-time maintenance responsibility."
+          },
+          "agentRules": {
+            "type": "object",
+            "properties": {
+              "marker": { "type": "string" },
+              "files": { "type": "array", "items": { "type": "string" } },
+              "skillFiles": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "authority": {
+            "type": "object",
+            "required": ["regenerate", "publish", "delete"],
+            "properties": {
+              "regenerate": { "type": "boolean" },
+              "publish": { "const": false },
+              "delete": { "const": false }
+            }
+          }
+        }
+      }
+    }
+  }
+}

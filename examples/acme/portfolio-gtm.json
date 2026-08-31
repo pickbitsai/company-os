@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "company-os.portfolio-gtm/v1",
+  "portfolio": "Acme",
+  "updatedAt": "2026-07-24T09:30:00.000Z",
+  "portfolioCall": "Lead with Signal as a measured workflow pilot. Keep Forge as the delivery proof behind that pilot, not a separate broad launch.",
+  "products": [
+    {
+      "id": "signal-briefing",
+      "projectId": "signal",
+      "name": "Signal Briefing",
+      "status": "pilot",
+      "lane": "lead",
+      "audience": "Small research and operations teams that repeatedly turn noisy source feeds into a daily decision.",
+      "hook": "A ranked shortlist with visible rejection reasons instead of another undifferentiated feed.",
+      "route": "Recruit five workflow-fit design partners, run their real source windows through Signal, and review the shortlist with them before discussing a paid pilot.",
+      "advanceWhen": "At least three teams use the shortlist in a real decision twice in one week and ask to repeat the workflow.",
+      "confidence": "medium",
+      "evidence": [
+        "packages/signal/package.json",
+        "engines.json#signal",
+        "Evidence gap: no external design-partner sessions recorded yet."
+      ],
+      "risks": [
+        "No external demand evidence",
+        "Source configuration may require high-touch onboarding"
+      ],
+      "owner": "Research lead"
+    },
+    {
+      "id": "forge-production-kit",
+      "projectId": "forge",
+      "name": "Forge Production Kit",
+      "status": "internal proof",
+      "lane": "validate",
+      "audience": "Teams that need a repeatable, provenance-backed path from an approved brief to a publishable artefact.",
+      "hook": "Every output ships with deterministic quality gates and a provenance record.",
+      "route": "Use Forge inside the Signal pilot and document whether its gates reduce review time; do not market it as a standalone product yet.",
+      "advanceWhen": "Two pilot teams ship accepted artefacts with less review rework and can explain which gate created the value.",
+      "confidence": "low",
+      "evidence": [
+        "packages/forge/package.json",
+        "packages/forge/status/project-status.json",
+        "Evidence gap: no comparative review-time dataset."
+      ],
+      "risks": [
+        "Current size-budget gate is failing",
+        "Standalone buyer and route are unproven"
+      ],
+      "owner": "Production lead"
+    }
+  ]
+}
