@@ -23,7 +23,7 @@ import {
   writeIntranetRegistry,
 } from "../src/index.mjs";
 import { INTRANET_SKILL } from "../src/intranet.mjs";
-import { publicFacts, publicSnapshot } from "../src/publish.mjs";
+import { assertPublicProse, publicFacts, publicSnapshot } from "../src/publish.mjs";
 import { scanScripts, wiredScripts } from "../src/scripts.mjs";
 import { companyCss } from "../src/styles.mjs";
 import { resolveScheduler } from "../src/scheduler.mjs";
@@ -169,6 +169,18 @@ await test("public projection is an allowlist: commands and ports never appear",
   assert.ok(!serialized.includes("npm run"), "no commands");
   assert.ok(!serialized.includes("acme-collect-morning"), "no task names");
   assert.match(serialized, /"stages":\["collect","dedupe","rank"\]/, "stage names are published");
+});
+
+await test("public projection fails closed on command-shaped prose", () => {
+  for (const bad of ["Runs deploy.ps1 nightly", "Re-run with --apply to write", "then npm run build", "node scripts/ship.mjs"]) {
+    assert.throws(() => assertPublicProse("signal", "role", bad), /command-shaped token/, bad);
+  }
+  for (const ok of ["Collects the morning feeds and ranks them", "Ships one brief per weekday", "state-of-the-art, e.g. the 2026 run"]) {
+    assertPublicProse("signal", "role", ok);
+  }
+  const leaky = structuredClone(manifest);
+  leaky.engines[0].nodes = [{ name: "sync --apply", cmd: "noop" }];
+  assert.throws(() => publicSnapshot({ manifest: leaky, config, nowIso: "2026-01-01T00:00:00.000Z" }), /stage name of engine/);
 });
 
 // ---------------------------------------------------------------- scheduler adapters
