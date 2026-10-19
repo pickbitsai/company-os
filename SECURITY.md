@@ -22,7 +22,7 @@ Specifically it reads: your manifest, each project's `package.json`, optional pe
 
 A manifest holds ports, task names, local paths and command lines. Nothing in this repository contains one; the only manifests here are fictional.
 
-If you configure a `publish` target, the projection is an **allowlist** — id, name, class, role, ingress, egress, and stage *names*. Never commands, ports, task names, paths or logs. Adding a field to your manifest cannot leak it; someone has to add it to the projection deliberately. Free-text `ingress`/`egress` entries are additionally dropped when they contain anything path-shaped, because internal prose routinely mentions real paths.
+If you configure a `publish` target, the projection is an **allowlist** — id, name, class, role, ingress, egress, and stage *names*. Never commands, ports, task names, paths or logs. Adding a field to your manifest cannot leak it; someone has to add it to the projection deliberately. Free-text `ingress`/`egress` entries are additionally dropped when they contain anything path-shaped, because internal prose routinely mentions real paths. A role, class, station, fact or stage name that carries a command-shaped token (a script file name, a `--flag`, an `npm run`/`node` invocation) fails the build closed, naming the row: prose is not redacted, it is rewritten by its author.
 
 ## Generated pages are files on disk
 

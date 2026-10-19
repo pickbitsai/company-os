@@ -197,7 +197,7 @@ panels: {
 
 ## Publishing a safe subset
 
-If a public site should show what your company does without exposing how it runs, declare a `publish` target. The projection is an **allowlist** — id, name, class, role, ingress, egress, and stage *names*. Never commands, ports, task names, paths, or logs. Adding a field to your manifest cannot leak it; someone has to add it to the projection on purpose. Free-text `ingress`/`egress` entries are additionally dropped if they contain anything path-shaped, because internal prose mentions real paths.
+If a public site should show what your company does without exposing how it runs, declare a `publish` target. The projection is an **allowlist** — id, name, class, role, ingress, egress, and stage *names*. Never commands, ports, task names, paths, or logs. Adding a field to your manifest cannot leak it; someone has to add it to the projection on purpose. Free-text `ingress`/`egress` entries are additionally dropped if they contain anything path-shaped, because internal prose mentions real paths. And a role, class, station, fact or stage name that carries a command-shaped token (a script file name, a `--flag`, an `npm run`/`node` invocation) fails the build closed, naming the row: prose is not redacted, it is rewritten by its author.
 
 ```js
 publish: [{ dir: "../website/data", globalName: "COMPANY_OS" }],

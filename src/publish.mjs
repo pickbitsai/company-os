@@ -32,20 +32,41 @@ export function publicFacts(values) {
     });
 }
 
+// Third line of defence: command-shaped prose. A script file name, a CLI flag or an npm/node
+// invocation inside a role, a class, a station, a published fact or a stage NAME is an internal
+// command leaking through a prose field. These are not dropped — a role cannot be half-published —
+// the build stops and names the row so the manifest author rewrites the sentence.
+const COMMAND_SHAPED = /(?:^|[\s("'`])(?:[\w-]+\.(?:mjs|cjs|js|ps1|sh|py|cmd|bat)|--[a-z][\w-]*|npm (?:run|start|test)|node (?:[\w.-]+\/)+[\w.-]+)(?=$|[\s)"'`.,;:])/i;
+export function assertPublicProse(engineId, field, value) {
+  const hit = String(value ?? "").match(COMMAND_SHAPED);
+  if (!hit) return;
+  throw new Error(`publish: ${field} of engine "${engineId}" carries a command-shaped token (${hit[0].trim()}); rewrite the prose — the projection does not redact`);
+}
+
 export function publicSnapshot({ manifest, config, nowIso }) {
-  const engines = manifest.engines.map((eng) => ({
-    id: eng.id,
-    name: eng.name,
-    class: eng.class,
-    accent: eng.accent,
-    badge: eng.avatar?.badge || null,
-    station: eng.avatar?.station || null,
-    role: eng.role,
-    ingress: publicFacts(eng.ingress),
-    egress: publicFacts(eng.egress),
+  const engines = manifest.engines.map((eng) => {
+    for (const field of ["role", "class"]) assertPublicProse(eng.id, field, eng[field]);
+    if (eng.avatar?.station) assertPublicProse(eng.id, "avatar.station", eng.avatar.station);
+    const ingress = publicFacts(eng.ingress);
+    const egress = publicFacts(eng.egress);
+    for (const fact of ingress) assertPublicProse(eng.id, "ingress", fact);
+    for (const fact of egress) assertPublicProse(eng.id, "egress", fact);
     // Stage NAMES only — never the commands that implement them.
-    stages: Array.isArray(eng.nodes) ? eng.nodes.map((node) => node.name).filter(Boolean) : [],
-  }));
+    const stages = Array.isArray(eng.nodes) ? eng.nodes.map((node) => node.name).filter(Boolean) : [];
+    for (const stage of stages) assertPublicProse(eng.id, "stage name", stage);
+    return {
+      id: eng.id,
+      name: eng.name,
+      class: eng.class,
+      accent: eng.accent,
+      badge: eng.avatar?.badge || null,
+      station: eng.avatar?.station || null,
+      role: eng.role,
+      ingress,
+      egress,
+      stages,
+    };
+  });
   const sourceRevision = createHash("sha256")
     .update(JSON.stringify({ projectionVersion: PROJECTION_VERSION, engines }))
     .digest("hex")
