@@ -164,6 +164,14 @@ ${note ? `<p class="doc"><b>Package note:</b> ${esc(note)}</p>` : ""}
       : null;
   }
 
+  // Engine pages live at <root>/<eng.dir>/index.html, and eng.dir may be nested
+  // (products/suite/module). The way back to the floor is one "../" per path segment,
+  // not a fixed single level — otherwise every nested engine page links to a missing file.
+  function upToRoot(eng) {
+    const depth = String(eng.dir || "").split(/[\\/]+/).filter(Boolean).length;
+    return "../".repeat(Math.max(1, depth));
+  }
+
   function avatarVisual(eng, hrefPrefix = "") {
     const avatar = eng.avatar || {};
     const art = avatarArt(eng.id, hrefPrefix);
@@ -306,14 +314,15 @@ ${showKicker ? `<p class="kicker">${esc(kicker)}</p>` : ""}${body}
     const servers = (eng.servers || [])
       .map((s) => `<tr><td class="mono"><a href="http://127.0.0.1:${s.port}">:${s.port}</a></td><td>${esc(s.what)}</td><td class="mono">${esc(s.start)}</td></tr>`)
       .join("");
-    const mascot = avatarArt(eng.id, "../");
+    const up = upToRoot(eng);
+    const mascot = avatarArt(eng.id, up);
     const body = `
 ${mascot ? `<div class="engine-mascot"><img src="${esc(mascot)}" alt="${esc(eng.name)} mascot" loading="lazy" decoding="async" width="96" height="96"></div>` : ""}
 <h1>${esc(eng.name)}</h1>
 <p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}${eng.owner ? ` ${ownerChip(eng.owner)}` : ""}</p>
 <p class="doc">${esc(eng.role)}</p>
 ${eng.dashboardNote ? `<p class="doc"><b>Live controls:</b> ${esc(eng.dashboardNote)}</p>` : ""}
-<p class="doc mono"><a href="../index.html">← all engines</a></p>
+<p class="doc mono"><a href="${up}index.html">← all engines</a></p>
 ${intranetSection(eng)}
 ${panelSections}
 <h2>Pipeline</h2><div class="flow" style="--acc:${eng.accent}">${flow || '<p class="doc">Session-driven — no fixed pipeline.</p>'}</div>
@@ -343,10 +352,11 @@ ${report ? `<h2>Security</h2><p class="doc">Last ${esc(reportsLabel)} of <span c
       .map((entry) => renderPanelHtml(entry, { onEnginePage: true, engineHref: null }))
       .filter(Boolean)
       .join("\n");
+    const up = upToRoot(eng);
     const body = `
 <h1>${esc(eng.name)} — commands</h1>
 <p class="klass" style="--acc:${eng.accent}">${esc(eng.class)}</p>
-<p class="doc mono"><a href="../index.html">← company floor</a> · <a href="index.html">${esc(eng.dir)} dashboard</a></p>
+<p class="doc mono"><a href="${up}index.html">← company floor</a> · <a href="index.html">${esc(eng.dir)} dashboard</a></p>
 ${intranetSection(eng)}
 ${panelSections}
 ${commandsSection(eng)}`;
