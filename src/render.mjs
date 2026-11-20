@@ -7,6 +7,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { CSS, companyCss, panelCss } from "./styles.mjs";
+import { GROUP_NAV_CSS, groupNavigation, groupNavigationJs } from "./group-nav.mjs";
 import {
   engineScripts, ownsOwnIndex, projectPath, scanScripts, scriptGroups, scriptsNote,
 } from "./scripts.mjs";
@@ -17,10 +18,10 @@ const COPY_JS = `<script>document.addEventListener('click',e=>{const b=e.target.
 const t=b.previousElementSibling.textContent;try{navigator.clipboard.writeText(t);}catch(_){const a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();document.execCommand('copy');a.remove();}
 b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);});</script>`;
 
-const companyJs = (themeKey) => `<script>(()=>{const key='${themeKey}';const buttons=[...document.querySelectorAll('[data-set-theme]')];
+const companyJs = (themeKey, navScript = "") => `<script>(()=>{const key='${themeKey}';const buttons=[...document.querySelectorAll('[data-set-theme]')];
 const setTheme=(theme)=>{if(!['storybook','pixel','anime'].includes(theme))theme='storybook';document.body.dataset.theme=theme;buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.setTheme===theme)));try{localStorage.setItem(key,theme)}catch{}};
 let saved='storybook';try{saved=localStorage.getItem(key)||saved}catch{}setTheme(saved);buttons.forEach(b=>b.addEventListener('click',()=>setTheme(b.dataset.setTheme)));
-})();</script>`;
+${navScript}})();</script>`;
 
 // `path` or `path#key` — the key selects an array inside the JSON document.
 function loadArray(root, spec) {
@@ -408,11 +409,12 @@ ${commandsSection(eng)}`;
         // registry having to duplicate command lines it would only get wrong.
         ? collection.rows(data, { esc, cmdRow, commands: (dir) => scanScripts(root, dir) })
         : (data.items || []).map((item) => `<tr>${(collection.headers || []).map((h) => `<td>${esc(item[h.field ?? h] ?? "")}</td>`).join("")}</tr>`).join("");
-      if (!rows) return "";
+      if (!rows) return { id: collection.id, html: "" };
       const headers = (collection.headers || []).map((h) => `<th>${esc(typeof h === "string" ? h : h.label)}</th>`).join("");
       const count = typeof collection.countLabel === "function" ? collection.countLabel(data) : collection.countLabel || "";
-      return `<details class="ops-section" id="${esc(collection.id)}"${collection.open ? " open" : ""}><summary>${esc(collection.title)} <span class="section-count">${esc(count)}</span>${collection.owner ? ` ${ownerChip(collection.owner)}` : ""}</summary><div class="table-shell"><table><tr>${headers}</tr>${rows}</table></div></details>`;
-    }).join("\n    ");
+      const html = `<details class="ops-section" id="${esc(collection.id)}"${collection.open ? " open" : ""}><summary>${esc(collection.title)} <span class="section-count">${esc(count)}</span>${collection.owner ? ` ${ownerChip(collection.owner)}` : ""}</summary><div class="table-shell"><table><tr>${headers}</tr>${rows}</table></div></details>`;
+      return { id: collection.id, html };
+    });
 
     // Satellites have no page of their own, so their command surface is listed here inline.
     const satelliteScripts = new Map((manifest.satellites || [])
@@ -478,13 +480,13 @@ ${commandsSection(eng)}`;
         const eng = entry.panel.engine
           ? manifest.engines.find((candidate) => candidate.dir === entry.panel.engine)
           : null;
-        return renderPanelHtml(entry, {
+        const html = renderPanelHtml(entry, {
           onEnginePage: false,
           engineHref: eng ? commandsHref(eng) : null,
         });
+        return { id: entry.panel.id, html };
       })
-      .filter(Boolean)
-      .join("\n    ");
+      .filter(({ html }) => html);
     const panelStats = panels
       .filter(({ panel }) => typeof panel.stat === "function")
       .map(({ panel, data }) => {
@@ -519,37 +521,54 @@ ${commandsSection(eng)}`;
       `<a href="#satellites">Network</a>`,
     ].filter(Boolean).join("");
 
+    const extraSectionIds = [
+      ...(reportRows ? ["security-reports"] : []), "refresh-snapshot",
+    ];
+    const navigation = Array.isArray(config.nav?.groups) ? groupNavigation(config.nav, [
+      "company-floor", ...(governance ? ["governance"] : []), "projects", "schedules",
+      ...collectionSections.filter(({ html }) => html).map(({ id }) => id),
+      ...panelSections.map(({ id }) => id), "satellites", ...extraSectionIds,
+    ]) : null;
+    const groupAttr = (group) => navigation ? ` data-nav-group="${esc(group)}"` : "";
+    const sectionAttr = (id) => groupAttr(navigation?.table.sectionGroups[id]);
+    const addSectionGroup = ({ id, html }) => navigation
+      ? html.replace(/^\s*<[a-z][\w-]*/i, (tag) => tag + sectionAttr(id))
+      : html;
+    const extraSectionAttrs = (id) => navigation ? ` id="${id}"${sectionAttr(id)}` : "";
+    const groupLinks = navigation?.groups.map(({ id, label }) =>
+      `<a href="#g-${esc(encodeURIComponent(id))}" data-group="${esc(id)}">${esc(label)}</a>`).join("");
+
     const body = `
 <div class="company-navbar"><nav class="company-nav" aria-label="Company navigation"><div class="brand-lockup"><span class="brand-mark">${esc(brand.mark)}</span> ${esc(brand.name)}</div>
-  <div class="company-links">${navLinks}</div></nav></div>
-<header class="company-hero">
+  <div class="company-links${navigation ? " company-group-links" : ""}">${groupLinks ?? navLinks}</div></nav></div>
+<header class="company-hero"${groupAttr(navigation?.table.defaultGroup)}>
   <div class="hero-inner"><p class="hero-eyebrow"><span class="live-dot"></span> Local company online · ${alertCount ? `${alertCount} item${alertCount === 1 ? "" : "s"} need attention` : "all scheduled systems nominal"}</p>
   <h1>${substituteCounts(brand.headline)}</h1>
   <p class="hero-copy">${esc(substituteCounts(brand.blurb))}</p>
   <div class="company-stats">${statTiles}</div></div>
 </header>
 <main class="company-main">
-  <div class="floor-heading"><div><h2>${esc(brand.floorHeading)}</h2><p>${esc(brand.floorSubheading)}</p></div>
+  <div class="floor-heading"${sectionAttr("company-floor")}><div><h2>${esc(brand.floorHeading)}</h2><p>${esc(brand.floorSubheading)}</p></div>
   <div class="theme-switcher" role="group" aria-label="Company art direction"><button class="theme-btn" type="button" data-set-theme="storybook" aria-pressed="true">Storybook</button><button class="theme-btn" type="button" data-set-theme="pixel" aria-pressed="false">16-bit HQ</button><button class="theme-btn" type="button" data-set-theme="anime" aria-pressed="false">Neo Anime</button></div></div>
-  <section class="company-floor" id="company-floor" aria-label="${esc(brand.floorAria)}">
+  <section class="company-floor" id="company-floor"${sectionAttr("company-floor")} aria-label="${esc(brand.floorAria)}">
     <div class="floor-status"><span>Company floor · live machine snapshot ${esc(stamp)}</span><span class="floor-legend"><span class="legend-item"><i class="legend-swatch good"></i>Nominal</span><span class="legend-item"><i class="legend-swatch alert"></i>Attention</span><span class="legend-item"><i class="legend-swatch manual"></i>On demand</span></span></div>
     <div class="station-grid">${engineCards}</div>
   </section>
   <section class="ops-directory" aria-labelledby="ops-directory-title"><h2 id="ops-directory-title">Operations directory</h2><p class="doc">The full factual layer is still here. Open a department to inspect the current machine snapshot.</p>
-    ${governance ? `<details class="ops-section" id="governance" open><summary>AI & automation governance <span class="section-count">${manifest.engines.length} engine profiles · ${workerCount} pinned workers</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc"><b>${esc(governance.doctrine?.summary || "")}</b> ${esc(governance.doctrine?.publicExplanation || "")}</p>${config.governanceChips ? config.governanceChips(governance, { esc }) : ""}<p class="doc mono">${config.governanceProvenance ? config.governanceProvenance(governance, { esc }) : `Canonical policy: ${esc(brand.policyLabel)}${governance.updatedAt ? ` · updated ${esc(governance.updatedAt)}` : ""}`}</p></div><div class="table-shell"><table><tr><th>Engine</th><th>Assurance</th><th>LLM role</th><th>Standard automation</th><th>Human role</th><th>Authority</th></tr>${governanceRows}</table></div></details>` : ""}
-    <details class="ops-section" id="projects" open><summary>Project pulse <span class="section-count">${projectContractCount} structured feeds · ${manifest.engines.length - projectContractCount} derived pages</span></summary><div class="table-shell"><table><tr><th>Project</th><th>Updated</th><th>What changed</th><th>TODOs</th><th>Security</th></tr>${projectRows}</table></div></details>
-    <details class="ops-section" id="schedules" open><summary>${esc(brand.schedulesTitle)} <span class="section-count">${allTaskNames.length} jobs · live state</span></summary><div class="table-shell"><table><tr><th>Task</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>State</th></tr>${schedTable}</table></div></details>
-    ${collectionSections}
-    ${panelSections}
-    <details class="ops-section" id="satellites"><summary>Satellites & sites <span class="section-count">${manifest.satellites?.length || 0} connected properties</span></summary><div class="table-shell"><table><tr><th>What</th><th>Note</th><th>Owner</th><th>Where</th></tr>${satellites}</table></div>${satelliteCommands ? `<div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">Satellites have no engine page — their npm commands, read live from each package.json:</p><div class="scripts">${satelliteCommands}</div></div>` : ""}</details>
-    ${reportRows ? `<details class="ops-section"><summary>${esc(reportsTitle)} <span class="section-count">latest 5 reports</span></summary><div class="table-shell"><table><tr><th>Target</th><th>Date</th><th>Report</th></tr>${reportRows}</table></div></details>` : ""}
-    <details class="ops-section"><summary>Refresh this snapshot <span class="section-count">generator-safe</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${cmdRow(config.rebuildCommand)}</div></details>
+    ${governance ? `<details class="ops-section" id="governance"${sectionAttr("governance")} open><summary>AI & automation governance <span class="section-count">${manifest.engines.length} engine profiles · ${workerCount} pinned workers</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc"><b>${esc(governance.doctrine?.summary || "")}</b> ${esc(governance.doctrine?.publicExplanation || "")}</p>${config.governanceChips ? config.governanceChips(governance, { esc }) : ""}<p class="doc mono">${config.governanceProvenance ? config.governanceProvenance(governance, { esc }) : `Canonical policy: ${esc(brand.policyLabel)}${governance.updatedAt ? ` · updated ${esc(governance.updatedAt)}` : ""}`}</p></div><div class="table-shell"><table><tr><th>Engine</th><th>Assurance</th><th>LLM role</th><th>Standard automation</th><th>Human role</th><th>Authority</th></tr>${governanceRows}</table></div></details>` : ""}
+    <details class="ops-section" id="projects"${sectionAttr("projects")} open><summary>Project pulse <span class="section-count">${projectContractCount} structured feeds · ${manifest.engines.length - projectContractCount} derived pages</span></summary><div class="table-shell"><table><tr><th>Project</th><th>Updated</th><th>What changed</th><th>TODOs</th><th>Security</th></tr>${projectRows}</table></div></details>
+    <details class="ops-section" id="schedules"${sectionAttr("schedules")} open><summary>${esc(brand.schedulesTitle)} <span class="section-count">${allTaskNames.length} jobs · live state</span></summary><div class="table-shell"><table><tr><th>Task</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>State</th></tr>${schedTable}</table></div></details>
+    ${collectionSections.map(addSectionGroup).join("\n    ")}
+    ${panelSections.map(addSectionGroup).join("\n    ")}
+    <details class="ops-section" id="satellites"${sectionAttr("satellites")}><summary>Satellites & sites <span class="section-count">${manifest.satellites?.length || 0} connected properties</span></summary><div class="table-shell"><table><tr><th>What</th><th>Note</th><th>Owner</th><th>Where</th></tr>${satellites}</table></div>${satelliteCommands ? `<div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)"><p class="doc">Satellites have no engine page — their npm commands, read live from each package.json:</p><div class="scripts">${satelliteCommands}</div></div>` : ""}</details>
+    ${reportRows ? `<details class="ops-section"${extraSectionAttrs("security-reports")}><summary>${esc(reportsTitle)} <span class="section-count">latest 5 reports</span></summary><div class="table-shell"><table><tr><th>Target</th><th>Date</th><th>Report</th></tr>${reportRows}</table></div></details>` : ""}
+    <details class="ops-section"${extraSectionAttrs("refresh-snapshot")}><summary>Refresh this snapshot <span class="section-count">generator-safe</span></summary><div style="padding:14px 16px;border-top:1px solid rgba(255,255,255,.07)">${cmdRow(config.rebuildCommand)}</div></details>
   </section>
 </main>`;
     return page(brand.name, brand.kicker, body, {
       bodyClass: "company-page",
-      extraCss: companyCss(config.backdrops),
-      extraScript: companyJs(brand.themeKey),
+      extraCss: companyCss(config.backdrops) + (navigation ? GROUP_NAV_CSS : ""),
+      extraScript: companyJs(brand.themeKey, navigation ? groupNavigationJs(navigation.table) : ""),
       showKicker: false,
     });
   }

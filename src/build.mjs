@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRenderer } from "./render.mjs";
+import { probeAndMarkLocalLinks } from "./local-links.mjs";
 import { engineScripts, ownsOwnIndex } from "./scripts.mjs";
 import { writeSnapshots } from "./publish.mjs";
 import { runPanels } from "./panels/index.mjs";
@@ -113,7 +114,18 @@ export async function build(config, { argv = [], log = console.log, warn = conso
     config, manifest, governance, tasks, stamp, nowIso, schedulerId, observesScheduler, panels, intranetState,
   });
 
-  function safeWrite(path, html) {
+  const written = [];
+  const pendingPages = [];
+  let localLinks;
+
+  function writePage(path, html) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, html);
+    log(`wrote ${path}`);
+    written.push(path);
+  }
+
+  function canWrite(path) {
     if (existsSync(path)) {
       const head = readFileSync(path, "utf8").slice(0, 400);
       if (!head.includes(config.generatedMark)) {
@@ -121,18 +133,20 @@ export async function build(config, { argv = [], log = console.log, warn = conso
         return false;
       }
     }
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, html);
-    log(`wrote ${path}`);
     return true;
   }
 
-  const written = [];
+  function stagePage(path, html) {
+    if (!canWrite(path)) return;
+    if (config.probeLocalLinks) pendingPages.push({ path, html });
+    else writePage(path, html);
+  }
+
   writeSnapshots({ manifest, config, nowIso, log });
 
   if (!sitesOnly) {
     const masterPath = join(config.outDir, "index.html");
-    if (safeWrite(masterPath, renderer.masterPage())) written.push(masterPath);
+    stagePage(masterPath, renderer.masterPage());
 
     for (const eng of manifest.engines) {
       const target = join(config.outDir, eng.dir, "index.html");
@@ -141,14 +155,21 @@ export async function build(config, { argv = [], log = console.log, warn = conso
         // Its commands would otherwise have nowhere to live.
         if (engineScripts(config.root, eng).length) {
           const sheet = join(config.outDir, eng.dir, "ops-commands.html");
-          if (safeWrite(sheet, renderer.commandsPage(eng))) written.push(sheet);
+          stagePage(sheet, renderer.commandsPage(eng));
         }
         continue;
       }
-      if (safeWrite(target, renderer.enginePage(eng))) written.push(target);
+      stagePage(target, renderer.enginePage(eng));
+    }
+    if (config.probeLocalLinks) {
+      localLinks = await probeAndMarkLocalLinks(pendingPages);
+      log(`Local links: ${localLinks.linksUp} up, ${localLinks.linksDown} down across ${localLinks.portsUp} up and ${localLinks.portsDown} down ports`);
+      for (const { path, html } of pendingPages) {
+        if (canWrite(path)) writePage(path, html);
+      }
     }
   }
 
   log("done.");
-  return { written, schedulerId, engines: manifest.engines.length };
+  return { written, schedulerId, engines: manifest.engines.length, ...(localLinks && { localLinks }) };
 }

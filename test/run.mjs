@@ -869,6 +869,9 @@ await test("the organizing guide the README sends people to exists", () => {
   }
 });
 
+const { testNavigation } = await import("./nav.mjs");
+await testNavigation(test, page("index.html"));
+
 // ---------------------------------------------------------------- summary
 console.log(`\n${failures.length ? `FAIL — ${failures.length} of ${passed + failures.length}` : `PASS — ${passed} tests`}`);
 if (failures.length) {

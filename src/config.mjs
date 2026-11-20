@@ -82,6 +82,8 @@ export function normalizeConfig(raw, base) {
     // Optional per-theme backdrop images. Omit for the built-in CSS gradients.
     backdrops: raw.backdrops || null,
     scheduler: raw.scheduler,
+    nav: raw.nav,
+    probeLocalLinks: raw.probeLocalLinks === true,
     // Extra tables rendered in the operations directory, each from a JSON file.
     collections: Array.isArray(raw.collections) ? raw.collections : [],
     // Optional cross-project panels: { env: {...}, docs: {...}, sessions: {...} }. Each is off
